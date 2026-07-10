@@ -11,7 +11,7 @@ The subject is personal as well as technical. Tornadoes and severe weather are r
 | Source | Purpose | Refresh | Important interpretation |
 |---|---|---|---|
 | National Weather Service alerts API | Current Tornado Watch and Tornado Warning status | Scheduled workflow, every 15 minutes | An alert is a forecast product, not a confirmed tornado event. |
-| NOAA NCEI Storm Events bulk details files | Confirmed historical tornado events | Committed 1950-2024 baseline plus current 2025 and 2026 source files on each workflow run | Damage survey records can be revised by NCEI releases. |
+| NOAA NCEI Storm Events bulk details files | Confirmed historical tornado events | Committed 1950-2024 baseline plus current-year source files, discovered dynamically and cached per UTC day | Damage survey records can be revised by NCEI releases. |
 
 The historical baseline is intentionally compact. `ingestion/build_historical_baseline.py` downloads the official NCEI files, retains only tornado records in the documented 13-state cohorts and source fields required by this project, and records exact filenames and retrieval time in `data/historical_baseline_metadata.json`.
 

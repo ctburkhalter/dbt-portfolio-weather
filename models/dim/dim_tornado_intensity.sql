@@ -1,10 +1,6 @@
 with ratings as (
   select distinct
-    case
-      when regexp_matches(trim(rating_code), '^EF[0-5]$') then trim(rating_code)
-      when regexp_matches(trim(rating_code), '^F[0-5]$') then trim(rating_code)
-      else 'Unknown'
-    end as rating_code
+    {{ normalized_rating_code('rating_code') }} as rating_code
   from {{ ref('src_ncei__tornado_events') }}
 ), normalized as (
   select

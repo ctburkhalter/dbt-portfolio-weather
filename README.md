@@ -56,7 +56,7 @@ Publish `public/` with GitHub Pages. Set the portfolio's `WEATHER_DATA_URL` to t
 
 `ingestion/build_historical_baseline.py` is a deliberate one-time baseline refresh. It downloads NCEI details files for 1950 through 2024, retains only confirmed tornado events for the documented 13-state cohorts and fields required by the data contract, then records the exact source files and retrieval timestamp in `data/historical_baseline_metadata.json`. For constrained environments it can resume non-overlapping ranges with `--append`. Commit the resulting compact baseline and metadata to this public repository.
 
-The scheduled workflow loads that committed historical baseline, discovers the latest official 2025 and 2026 NCEI bulk files, and appends their cohort events before dbt builds. This keeps the dashboard current without repeatedly downloading the full historical archive. It fails before publishing if source freshness, dbt tests, or JSON export fail, leaving the previous GitHub Pages artifact intact.
+The scheduled workflow loads that committed historical baseline, discovers the latest official NCEI bulk files for every year after the baseline through the current year, and appends their cohort events before dbt builds. Those current-year bulk files are cached per UTC day so the every-15-minute schedule only re-downloads and reprocesses them once a day, keeping the dashboard current without repeatedly downloading the full historical archive or hammering NCEI on every alert poll. It fails before publishing if source freshness, dbt tests, or JSON export fail, leaving the previous GitHub Pages artifact intact.
 
 ## Deployment
 

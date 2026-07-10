@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 
 INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
+BASELINE_END_YEAR = 2024
 
 
 def latest_filename(index: str, year: int) -> str:
@@ -21,7 +23,11 @@ def latest_filename(index: str, year: int) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--years", nargs="+", type=int, default=[2025, 2026])
+    current_year = datetime.now(timezone.utc).year
+    parser.add_argument(
+        "--years", nargs="+", type=int,
+        default=list(range(BASELINE_END_YEAR + 1, current_year + 1)),
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("/tmp/ncei-storm-events"))
     args = parser.parse_args()
 

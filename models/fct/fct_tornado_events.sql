@@ -29,9 +29,5 @@ select
   geography.is_tornado_cohort
 from {{ ref('src_ncei__tornado_events') }} as event
 left join {{ ref('dim_tornado_intensity') }} as intensity
-  on case
-    when regexp_matches(trim(event.rating_code), '^EF[0-5]$') then trim(event.rating_code)
-    when regexp_matches(trim(event.rating_code), '^F[0-5]$') then trim(event.rating_code)
-    else 'Unknown'
-  end = intensity.rating_code
+  on {{ normalized_rating_code('event.rating_code') }} = intensity.rating_code
 left join {{ ref('dim_geography') }} as geography using (state, county)
