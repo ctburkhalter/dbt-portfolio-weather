@@ -23,7 +23,7 @@ Use `DBT_DUCKDB_PATH=/tmp/south-alabama-tornado.duckdb` for disposable local val
 
 - Python ingests NCEI historical confirmed tornado events and current NWS Tornado Watch and Tornado Warning products into DuckDB.
 - dbt models source data through `src`, `dim`, `fct`, and `marts` layers. Preserve that lineage in model changes.
-- `scripts/publish_dashboard.py` creates the versioned `portfolio-weather.v1.json` and `tornado-events.v1.json` contracts consumed by the portfolio's same-origin weather API.
+- `scripts/publish_dashboard.py` creates the versioned `portfolio-weather.v1.json` contract (dashboard metadata, live status, marts, `eventYearIndex`) and one `events/{year}.json` file per year of confirmed events, consumed by the portfolio's same-origin weather API. No individual events are embedded in `portfolio-weather.v1.json`; keep it that way so it stays cacheable.
 - GitHub Actions refreshes recent NCEI files, validates source freshness and dbt tests, then publishes JSON and dbt docs through GitHub Pages. A failed run must leave the previous published artifact available.
 
 ## Data semantics and guardrails

@@ -3,7 +3,7 @@ name: Refresh tornado dashboard data
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "0 * * * *"
 
 permissions:
   contents: read
@@ -36,8 +36,8 @@ jobs:
         with:
           path: /tmp/ncei-storm-events
           key: ncei-recent-${{ steps.date.outputs.today }}
-      # NCEI bulk files are not republished on a 15-minute cadence, unlike NWS alerts.
-      # Caching by day avoids re-downloading and reprocessing them on every alert poll.
+      # NCEI bulk files are not republished on every hourly alert poll.
+      # Caching by day avoids re-downloading and reprocessing them on every run.
       - if: steps.ncei-cache.outputs.cache-hit != 'true'
         run: python ingestion/refresh_recent_ncei.py --output-dir /tmp/ncei-storm-events
       - run: for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done

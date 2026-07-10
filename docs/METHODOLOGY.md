@@ -10,7 +10,7 @@ The subject is personal as well as technical. Tornadoes and severe weather are r
 
 | Source | Purpose | Refresh | Important interpretation |
 |---|---|---|---|
-| National Weather Service alerts API | Current Tornado Watch and Tornado Warning status | Scheduled workflow, every 15 minutes | An alert is a forecast product, not a confirmed tornado event. |
+| National Weather Service alerts API | Current Tornado Watch and Tornado Warning status | Scheduled workflow, hourly | An alert is a forecast product, not a confirmed tornado event. |
 | NOAA NCEI Storm Events bulk details files | Confirmed historical tornado events | Committed 1950-2024 baseline plus current-year source files, discovered dynamically and cached per UTC day | Damage survey records can be revised by NCEI releases. |
 
 The historical baseline is intentionally compact. `ingestion/build_historical_baseline.py` downloads the official NCEI files, retains only tornado records in the documented 13-state cohorts and source fields required by this project, and records exact filenames and retrieval time in `data/historical_baseline_metadata.json`.
@@ -58,12 +58,12 @@ These are project-defined analytical cohorts, not official meteorological bounda
 
 ## Published interfaces
 
-The exporter creates two versioned static contracts, both with `schemaVersion: "1.0"`:
+The exporter creates versioned static contracts, all with `schemaVersion: "1.0"`:
 
-- `data/portfolio-weather.v1.json`: live alert status, dashboard marts, and event detail used by the weather route.
-- `data/tornado-events.v1.json`: event index used by the event explorer API.
+- `data/portfolio-weather.v1.json`: live alert status, dashboard marts, and an `eventYearIndex` (`{year, count}` per year with data) used by the weather route. It intentionally carries no individual event records, so it stays small enough for the consumer's fetch cache to hold.
+- `data/events/{year}.json`: one file per year of confirmed events, each with full detail (rating, wind estimate, path, endpoints, impacts, narrative, source). Nothing is trimmed; history is partitioned by year rather than shipped as a single array, and every year observed so far fits comfortably under a 2MB per-file budget.
 
-The consumer website retrieves these through same-origin API routes. It validates the contract version, applies bounded event filters server-side, caches dashboard data for 15 minutes, caches event requests briefly, and retains the most recent successful data during upstream failures.
+The consumer website retrieves these through same-origin API routes. It validates the contract version, fetches only the year (or year range) a visitor selects, applies bounded event filters server-side, caches dashboard and event data for 15 minutes, and retains the most recent successful data during upstream failures.
 
 ## Quality controls
 
