@@ -1,0 +1,22 @@
+name: south_alabama_tornado_watch
+version: "1.0.0"
+config-version: 2
+
+profile: south_alabama_tornado_watch
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  south_alabama_tornado_watch:
+    +materialized: table
+    src:
+      +schema: src
+    dim:
+      +schema: dim
+    fct:
+      +schema: fct
+    marts:
+      +schema: marts

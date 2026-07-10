@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    tables:
+      - name: nws_ingestion_runs
+        description: One row for every NWS polling attempt, including successful polls that return no active alerts.
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 30, period: minute}
+            error_after: {count: 2, period: hour}
+        columns:
+          - name: ingested_at
+            tests: [not_null]
+      - name: nws_active_alerts
+        description: Current NWS Tornado Watch and Tornado Warning products ingested from api.weather.gov.
+        columns:
+          - name: alert_id
+            tests: [not_null, unique]
+      - name: ncei_tornado_events
+        description: Filtered NOAA NCEI Storm Events tornado records for the project analysis cohorts.
+        columns:
+          - name: event_id
+            tests: [not_null, unique]
+          - name: event_type
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ["Tornado"]

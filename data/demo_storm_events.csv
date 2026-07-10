@@ -1,0 +1,4 @@
+EVENT_ID,EVENT_TYPE,STATE,CZ_NAME,BEGIN_DATE_TIME,BEGIN_LOCATION,END_LOCATION,TOR_F_SCALE,TOR_LENGTH,TOR_WIDTH,BEGIN_LAT,BEGIN_LON,END_LAT,END_LON,INJURIES_DIRECT,DEATHS_DIRECT,DAMAGE_PROPERTY,DAMAGE_CROPS,EVENT_NARRATIVE
+demo-al-001,Tornado,AL,Houston,26-MAR-23 17:15:00,West of Dothan,Near Columbia,EF2,12.4,400,31.223,-85.490,31.310,-85.310,2,0,2.50M,0,Demo fixture for validating the published dashboard contract.
+demo-al-002,Tornado,AL,Geneva,17-MAR-21 21:42:00,Southwest of Hartford,Northeast of Hartford,EF3,8.7,650,31.070,-85.700,31.160,-85.580,6,0,5.20M,150.00K,Demo fixture for validating severe rating and path attributes.
+demo-tx-001,Tornado,TX,Example,09-MAY-20 14:30:00,Example origin,Example endpoint,F2,19.1,450,32.100,-100.100,32.230,-99.950,1,0,1.00M,0,Demo fixture for a legacy Fujita rating.
