@@ -42,6 +42,7 @@ jobs:
         run: python ingestion/refresh_recent_ncei.py --output-dir /tmp/ncei-storm-events
       - run: for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
       - run: python ingestion/fetch_nws_alerts.py
+      - run: python ingestion/fetch_preliminary_tornado_reports.py
       - run: DBT_PROFILES_DIR=. dbt source freshness
       - run: DBT_PROFILES_DIR=. dbt build
       - run: DBT_PROFILES_DIR=. dbt docs generate

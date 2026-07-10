@@ -1,5 +1,6 @@
 # Local dbt and DuckDB output
 weather.duckdb
+*.duckdb
 target/
 dbt_packages/
 logs/
