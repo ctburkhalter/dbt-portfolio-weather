@@ -11,9 +11,6 @@ from pathlib import Path
 
 import duckdb
 
-MONTHS = [(1, "Jan"), (2, "Feb"), (3, "Mar"), (4, "Apr"), (5, "May"), (6, "Jun"), (7, "Jul"), (8, "Aug"), (9, "Sep"), (10, "Oct"), (11, "Nov"), (12, "Dec")]
-
-
 def records(con: duckdb.DuckDBPyConnection, query: str) -> list[dict]:
     cursor = con.execute(query)
     columns = [column[0] for column in cursor.description]
@@ -33,50 +30,6 @@ def main() -> None:
     output.mkdir(parents=True, exist_ok=True)
 
     con = duckdb.connect(args.database, read_only=True)
-    monthly_rows = records(con, "select * from marts.mart_monthly_seasonality")
-    monthly_index = {(row["region"], row["month_number"]): row for row in monthly_rows}
-    monthly = {
-        region: [
-            {
-                "month": month,
-                "tornadoes": int(monthly_index.get((region, month_number), {}).get("tornadoes", 0)),
-                "significantTornadoes": int(monthly_index.get((region, month_number), {}).get("significant_tornadoes", 0)),
-            }
-            for month_number, month in MONTHS
-        ]
-        for region in ("alabama", "dixie", "tornado")
-    }
-    annual = [
-        {
-            "year": row["year"],
-            "tornadoes": row["tornadoes"],
-            "significantTornadoes": row["significant_tornadoes"],
-            "confirmedTornadoes": row["confirmed_tornadoes"],
-            "preliminaryTornadoReports": row["preliminary_tornado_reports"],
-        }
-        for row in records(con, "select * from marts.mart_annual_trend_current order by year")
-    ]
-    county = [
-        {"county": row["county"], "tornadoes": row["tornadoes"], "significantTornadoes": row["significant_tornadoes"], "injuries": row["injuries"], "maxRating": row["max_rating"] or "Unknown"}
-        for row in records(con, "select * from marts.mart_county_impact limit 10")
-    ]
-    alert_rows = records(con, """
-      select alert_id, max(event) as event, max(headline) as headline, max(sent_at) as sent_at,
-        max(expires_at) as expires_at, max(severity) as severity, max(certainty) as certainty,
-        max(urgency) as urgency, max(area_description) as area_description, max(detection) as detection,
-        max(damage_threat) as damage_threat, max(motion_description) as motion_description,
-        max(source_url) as source_url, bool_or(affects_dothan) as affects_dothan
-      from fct.fct_active_tornado_alerts
-      group by 1
-    """)
-    alerts = [{
-        "id": row["alert_id"], "event": row["event"], "headline": row["headline"] or row["event"],
-        "sentAt": iso(row["sent_at"]), "expiresAt": iso(row["expires_at"]), "severity": row["severity"],
-        "certainty": row["certainty"], "urgency": row["urgency"], "areaDescription": row["area_description"],
-        "detection": row["detection"], "damageThreat": row["damage_threat"], "motionDescription": row["motion_description"],
-        "sourceUrl": row["source_url"],
-    } for row in alert_rows]
-
     coverage = records(con, """
       select
         max(occurred_at) filter (where record_status = 'confirmed') as confirmed_through,
@@ -122,23 +75,19 @@ def main() -> None:
         "schemaVersion": "1.0",
         "sourceMode": "pipeline",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "sourceCoverage": "NWS current tornado products, filtered NOAA NCEI confirmed Storm Events records, and preliminary Iowa State Mesonet Local Storm Reports after the latest NCEI cutoff for the documented project cohorts.",
+        "sourceCoverage": "Filtered NOAA NCEI confirmed Storm Events records and preliminary Iowa State Mesonet Local Storm Reports after the latest NCEI cutoff for the documented project cohorts.",
         "eventCoverage": {
             "confirmedThrough": iso(coverage["confirmed_through"]),
             "preliminaryFrom": iso(coverage["preliminary_from"]),
             "preliminaryThrough": iso(coverage["preliminary_through"]),
             "preliminaryCount": coverage["preliminary_count"],
         },
-        "liveStatus": {"dothanHasActiveAlert": any(row["affects_dothan"] for row in alert_rows), "alabamaHasActiveAlert": bool(alert_rows), "alerts": alerts},
-        "monthlySeasonality": monthly,
-        "annualTrend": annual,
-        "countyImpact": county,
         "eventYearIndex": event_year_index,
     }
     (output / "portfolio-weather.v1.json").write_text(json.dumps(payload, default=str, separators=(",", ":")), encoding="utf-8")
     con.close()
     total_events = sum(len(v) for v in events_by_year.values())
-    print(f"Published {total_events} event records across {len(events_by_year)} year shards and {len(alerts)} active alert records")
+    print(f"Published {total_events} event records across {len(events_by_year)} year shards")
 
 
 if __name__ == "__main__":
