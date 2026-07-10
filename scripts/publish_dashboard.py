@@ -47,8 +47,14 @@ def main() -> None:
         for region in ("alabama", "dixie", "tornado")
     }
     annual = [
-        {"year": row["year"], "tornadoes": row["tornadoes"], "significantTornadoes": row["significant_tornadoes"]}
-        for row in records(con, "select * from marts.mart_annual_trend order by year")
+        {
+            "year": row["year"],
+            "tornadoes": row["tornadoes"],
+            "significantTornadoes": row["significant_tornadoes"],
+            "confirmedTornadoes": row["confirmed_tornadoes"],
+            "preliminaryTornadoReports": row["preliminary_tornado_reports"],
+        }
+        for row in records(con, "select * from marts.mart_annual_trend_current order by year")
     ]
     county = [
         {"county": row["county"], "tornadoes": row["tornadoes"], "significantTornadoes": row["significant_tornadoes"], "injuries": row["injuries"], "maxRating": row["max_rating"] or "Unknown"}
@@ -71,7 +77,16 @@ def main() -> None:
         "sourceUrl": row["source_url"],
     } for row in alert_rows]
 
-    event_rows = records(con, "select * from fct.fct_tornado_events order by occurred_at desc")
+    coverage = records(con, """
+      select
+        max(occurred_at) filter (where record_status = 'confirmed') as confirmed_through,
+        min(occurred_at) filter (where record_status = 'preliminary') as preliminary_from,
+        max(occurred_at) filter (where record_status = 'preliminary') as preliminary_through,
+        count(*) filter (where record_status = 'preliminary') as preliminary_count
+      from fct.fct_tornado_events_current
+    """)[0]
+
+    event_rows = records(con, "select * from fct.fct_tornado_events_current order by occurred_at desc")
     events_by_year: dict[int, list[dict]] = defaultdict(list)
     for row in event_rows:
         regions = []
@@ -82,12 +97,14 @@ def main() -> None:
         events_by_year[row["occurred_at"].year].append({
             "eventId": row["event_id"], "regionIds": regions, "occurredAt": occurred_at, "state": row["state"],
             "county": row["county"], "beginLocation": row["begin_location"], "endLocation": row["end_location"],
-            "ratingCode": row["rating_code"] or "Unknown", "scaleSystem": row["scale_system"], "ratingValue": row["rating_value"],
+            "ratingCode": row["rating_code"], "scaleSystem": row["scale_system"], "ratingValue": row["rating_value"],
             "windEstimateLowMph": row["wind_estimate_low_mph"], "windEstimateHighMph": row["wind_estimate_high_mph"],
             "windEstimateNote": row["wind_estimate_note"], "pathLengthMiles": row["path_length_miles"], "pathWidthYards": row["path_width_yards"],
             "beginLatitude": row["begin_latitude"], "beginLongitude": row["begin_longitude"], "endLatitude": row["end_latitude"], "endLongitude": row["end_longitude"],
             "injuries": row["injuries"], "fatalities": row["fatalities"], "propertyDamageUsd": row["property_damage_usd"],
             "cropDamageUsd": row["crop_damage_usd"], "narrative": row["narrative"], "sourceUrl": row["source_url"],
+            "sourceAttribution": row["source_attribution"], "wfo": row["wfo"],
+            "recordStatus": row["record_status"], "sourceSystem": row["source_system"], "isSurveyedTrack": row["is_surveyed_track"],
         })
 
     events_dir = output / "events"
@@ -105,7 +122,13 @@ def main() -> None:
         "schemaVersion": "1.0",
         "sourceMode": "pipeline",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "sourceCoverage": "NWS current tornado products plus filtered NOAA NCEI Storm Events records for the documented project cohorts.",
+        "sourceCoverage": "NWS current tornado products, filtered NOAA NCEI confirmed Storm Events records, and preliminary Iowa State Mesonet Local Storm Reports after the latest NCEI cutoff for the documented project cohorts.",
+        "eventCoverage": {
+            "confirmedThrough": iso(coverage["confirmed_through"]),
+            "preliminaryFrom": iso(coverage["preliminary_from"]),
+            "preliminaryThrough": iso(coverage["preliminary_through"]),
+            "preliminaryCount": coverage["preliminary_count"],
+        },
         "liveStatus": {"dothanHasActiveAlert": any(row["affects_dothan"] for row in alert_rows), "alabamaHasActiveAlert": bool(alert_rows), "alerts": alerts},
         "monthlySeasonality": monthly,
         "annualTrend": annual,

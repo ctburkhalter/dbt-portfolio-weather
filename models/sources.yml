@@ -29,3 +29,13 @@ sources:
               - accepted_values:
                   arguments:
                     values: ["Tornado"]
+      - name: preliminary_tornado_reports
+        description: Preliminary Iowa State Mesonet Local Storm Report tornado point reports after the latest confirmed NCEI event.
+        columns:
+          - name: report_id
+            tests: [not_null, unique]
+          - name: report_type
+            tests:
+              - accepted_values:
+                  arguments:
+                    values: ["TORNADO"]
