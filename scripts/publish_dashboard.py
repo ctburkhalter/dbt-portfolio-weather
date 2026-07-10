@@ -72,14 +72,15 @@ def main() -> None:
     } for row in alert_rows]
 
     event_rows = records(con, "select * from fct.fct_tornado_events order by occurred_at desc")
-    events = []
+    events_by_year: dict[int, list[dict]] = defaultdict(list)
     for row in event_rows:
         regions = []
         if row["is_alabama"]: regions.append("alabama")
         if row["is_dixie_cohort"]: regions.append("dixie")
         if row["is_tornado_cohort"]: regions.append("tornado")
-        events.append({
-            "eventId": row["event_id"], "regionIds": regions, "occurredAt": iso(row["occurred_at"]), "state": row["state"],
+        occurred_at = iso(row["occurred_at"])
+        events_by_year[row["occurred_at"].year].append({
+            "eventId": row["event_id"], "regionIds": regions, "occurredAt": occurred_at, "state": row["state"],
             "county": row["county"], "beginLocation": row["begin_location"], "endLocation": row["end_location"],
             "ratingCode": row["rating_code"] or "Unknown", "scaleSystem": row["scale_system"], "ratingValue": row["rating_value"],
             "windEstimateLowMph": row["wind_estimate_low_mph"], "windEstimateHighMph": row["wind_estimate_high_mph"],
@@ -88,6 +89,17 @@ def main() -> None:
             "injuries": row["injuries"], "fatalities": row["fatalities"], "propertyDamageUsd": row["property_damage_usd"],
             "cropDamageUsd": row["crop_damage_usd"], "narrative": row["narrative"], "sourceUrl": row["source_url"],
         })
+
+    events_dir = output / "events"
+    events_dir.mkdir(parents=True, exist_ok=True)
+    event_year_index = []
+    for year in sorted(events_by_year, reverse=True):
+        year_events = events_by_year[year]
+        (events_dir / f"{year}.json").write_text(
+            json.dumps({"schemaVersion": "1.0", "year": year, "events": year_events}, default=str, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        event_year_index.append({"year": year, "count": len(year_events)})
 
     payload = {
         "schemaVersion": "1.0",
@@ -98,12 +110,12 @@ def main() -> None:
         "monthlySeasonality": monthly,
         "annualTrend": annual,
         "countyImpact": county,
-        "events": events,
+        "eventYearIndex": event_year_index,
     }
     (output / "portfolio-weather.v1.json").write_text(json.dumps(payload, default=str, separators=(",", ":")), encoding="utf-8")
-    (output / "tornado-events.v1.json").write_text(json.dumps({"schemaVersion": "1.0", "events": events}, default=str, separators=(",", ":")), encoding="utf-8")
     con.close()
-    print(f"Published {len(events)} event records and {len(alerts)} active alert records")
+    total_events = sum(len(v) for v in events_by_year.values())
+    print(f"Published {total_events} event records across {len(events_by_year)} year shards and {len(alerts)} active alert records")
 
 
 if __name__ == "__main__":

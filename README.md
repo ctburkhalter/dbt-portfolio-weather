@@ -1,6 +1,6 @@
 # South Alabama Tornado Watch Pipeline
 
-This is the standalone companion data project for the portfolio `/weather` route. It uses Python ingestion, DuckDB, and dbt to publish two static JSON contracts and dbt docs to GitHub Pages.
+This is the standalone companion data project for the portfolio `/weather` route. It uses Python ingestion, DuckDB, and dbt to publish a small dashboard contract, one JSON file per year of confirmed tornado events, and dbt docs to GitHub Pages.
 
 See [Methodology and data contract](docs/METHODOLOGY.md) for sources, lineage, cohorts, interpretation guardrails, published interfaces, and quality controls.
 
@@ -22,8 +22,10 @@ See [Methodology and data contract](docs/METHODOLOGY.md) for sources, lineage, c
 
 `scripts/publish_dashboard.py` exports:
 
-- `portfolio-weather.v1.json`: dashboard metadata, live status, chart marts, and rich event detail.
-- `tornado-events.v1.json`: event index for the explorer endpoint.
+- `portfolio-weather.v1.json`: dashboard metadata, live status, chart marts, and an `eventYearIndex` (`{year, count}` per year with data). No individual event records: this file stays small enough for the consumer's fetch cache to actually cache it.
+- `events/{year}.json`: one file per year, each holding every confirmed event for that year with full detail (rating, wind estimate, path, endpoints, impacts, narrative, source). Every year's file has come in under the 2MB fetch-cache ceiling in practice; the largest on record is the 2011 season at roughly 1.4MB.
+
+Nothing is trimmed or truncated: full history stays available, just partitioned by year instead of shipped as one array. The consumer fetches only the year (or years) a visitor actually asks for.
 
 The interface is versioned because the portfolio page validates `schemaVersion = "1.0"` before treating a remote artifact as production data.
 
@@ -34,7 +36,7 @@ The event-map tab uses published beginning and ending coordinates. It renders an
 - `raw.nws_ingestion_runs` records every successful NWS poll, including zero-alert results, so freshness measures pipeline health rather than the chance of an active warning.
 - dbt validates source keys, accepted values, rating dimensions, non-negative injuries and fatalities, and fact uniqueness.
 - The workflow runs source freshness, `dbt build`, JSON export, and dbt docs generation before publishing. A failure ends before deployment, preserving the last successful GitHub Pages artifact.
-- The portfolio caches the published JSON server-side for 15 minutes and falls back to a visibly labeled local fixture if no artifact URL is configured or the remote contract is invalid.
+- The portfolio caches each published JSON file server-side for 15 minutes and falls back to a visibly labeled local fixture if no artifact URL is configured or the remote contract is invalid.
 
 ## Local run
 
@@ -52,11 +54,11 @@ python scripts/publish_dashboard.py --output public/data
 python -m unittest discover -s tests
 ```
 
-Publish `public/` with GitHub Pages. Set the portfolio's `WEATHER_DATA_URL` to the resulting `data/portfolio-weather.v1.json` URL.
+Publish `public/` with GitHub Pages. Set the portfolio's `WEATHER_DATA_URL` to the resulting `data/portfolio-weather.v1.json` URL; the consumer derives each year shard's URL (`data/events/{year}.json`) from that same base path.
 
 `ingestion/build_historical_baseline.py` is a deliberate one-time baseline refresh. It downloads NCEI details files for 1950 through 2024, retains only confirmed tornado events for the documented 13-state cohorts and fields required by the data contract, then records the exact source files and retrieval timestamp in `data/historical_baseline_metadata.json`. For constrained environments it can resume non-overlapping ranges with `--append`. Commit the resulting compact baseline and metadata to this public repository.
 
-The scheduled workflow loads that committed historical baseline, discovers the latest official NCEI bulk files for every year after the baseline through the current year, and appends their cohort events before dbt builds. Those current-year bulk files are cached per UTC day so the every-15-minute schedule only re-downloads and reprocesses them once a day, keeping the dashboard current without repeatedly downloading the full historical archive or hammering NCEI on every alert poll. It fails before publishing if source freshness, dbt tests, or JSON export fail, leaving the previous GitHub Pages artifact intact.
+The scheduled workflow loads that committed historical baseline, discovers the latest official NCEI bulk files for every year after the baseline through the current year, and appends their cohort events before dbt builds. Those current-year bulk files are cached per UTC day so the hourly schedule only re-downloads and reprocesses them once a day, keeping the dashboard current without repeatedly downloading the full historical archive or hammering NCEI on every run. It fails before publishing if source freshness, dbt tests, or JSON export fail, leaving the previous GitHub Pages artifact intact.
 
 ## Deployment
 

@@ -9,8 +9,8 @@ sources:
         config:
           loaded_at_field: ingested_at
           freshness:
-            warn_after: {count: 30, period: minute}
-            error_after: {count: 2, period: hour}
+            warn_after: {count: 2, period: hour}
+            error_after: {count: 6, period: hour}
         columns:
           - name: ingested_at
             tests: [not_null]
