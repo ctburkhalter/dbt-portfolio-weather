@@ -33,6 +33,8 @@ confirmed as (
     is_alabama,
     is_dixie_cohort,
     is_tornado_cohort,
+    cast(null as varchar) as source_attribution,
+    cast(null as varchar) as wfo,
     'confirmed' as record_status,
     'ncei_storm_events' as source_system,
     false as is_surveyed_track
@@ -47,8 +49,8 @@ preliminary as (
     event.county,
     event.begin_location,
     event.end_location,
-    coalesce(event.rating_code, 'Preliminary') as rating_code,
-    coalesce(event.scale_system, 'Unknown') as scale_system,
+    event.rating_code,
+    event.scale_system,
     event.rating_value,
     event.intensity_class,
     event.wind_estimate_low_mph,
@@ -69,6 +71,8 @@ preliminary as (
     event.is_alabama,
     event.is_dixie_cohort,
     event.is_tornado_cohort,
+    event.report_source as source_attribution,
+    event.wfo,
     'preliminary' as record_status,
     'iem_lsr' as source_system,
     false as is_surveyed_track

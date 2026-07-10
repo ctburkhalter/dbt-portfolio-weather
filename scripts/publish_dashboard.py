@@ -97,12 +97,13 @@ def main() -> None:
         events_by_year[row["occurred_at"].year].append({
             "eventId": row["event_id"], "regionIds": regions, "occurredAt": occurred_at, "state": row["state"],
             "county": row["county"], "beginLocation": row["begin_location"], "endLocation": row["end_location"],
-            "ratingCode": row["rating_code"] or "Unknown", "scaleSystem": row["scale_system"], "ratingValue": row["rating_value"],
+            "ratingCode": row["rating_code"], "scaleSystem": row["scale_system"], "ratingValue": row["rating_value"],
             "windEstimateLowMph": row["wind_estimate_low_mph"], "windEstimateHighMph": row["wind_estimate_high_mph"],
             "windEstimateNote": row["wind_estimate_note"], "pathLengthMiles": row["path_length_miles"], "pathWidthYards": row["path_width_yards"],
             "beginLatitude": row["begin_latitude"], "beginLongitude": row["begin_longitude"], "endLatitude": row["end_latitude"], "endLongitude": row["end_longitude"],
             "injuries": row["injuries"], "fatalities": row["fatalities"], "propertyDamageUsd": row["property_damage_usd"],
             "cropDamageUsd": row["crop_damage_usd"], "narrative": row["narrative"], "sourceUrl": row["source_url"],
+            "sourceAttribution": row["source_attribution"], "wfo": row["wfo"],
             "recordStatus": row["record_status"], "sourceSystem": row["source_system"], "isSurveyedTrack": row["is_surveyed_track"],
         })
 

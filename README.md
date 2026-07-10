@@ -19,12 +19,12 @@ See [Methodology and data contract](docs/METHODOLOGY.md) for sources, lineage, c
 | `src` | `src_nws__active_alerts`, `src_ncei__tornado_events`, `src_iem__preliminary_tornado_reports` | Typed source fields with no business interpretation beyond normalization. |
 | `dim` | `dim_date`, `dim_geography`, `dim_tornado_intensity` | Reusable calendar, cohort, and F/EF rating definitions. Wind ranges remain explicitly damage-based estimates. |
 | `fct` | `fct_active_tornado_alerts`, `fct_tornado_events`, `fct_preliminary_tornado_reports`, `fct_tornado_events_current` | One active alert product, one confirmed historical event, one preliminary point report, or the combined current event view. These facts are intentionally not joined as warning-to-tornado attribution. |
-| `marts` | monthly seasonality, annual trend, county impact | Stable aggregates for the portfolio charts. Seasonality and county impact remain confirmed-only; annual trend uses the current combined event view with confirmed and preliminary counts exposed separately. |
+| `marts` | monthly seasonality, annual trend, county impact | Stable aggregates for the portfolio charts. Seasonality and county impact remain confirmed-only; annual trend uses the current combined event view but keeps `tornadoes` confirmed-only and exposes preliminary report counts separately. |
 
 `scripts/publish_dashboard.py` exports:
 
 - `portfolio-weather.v1.json`: dashboard metadata, live status, chart marts, event coverage metadata, and an `eventYearIndex` (`{year, count}` per year with data). No individual event records: this file stays small enough for the consumer's fetch cache to actually cache it.
-- `events/{year}.json`: one file per year, each holding every current event for that year with source, status, rating, wind estimate, path, endpoints, impacts, and narrative where available. Confirmed NCEI rows are full event records. Preliminary IEM rows are point reports with unavailable survey fields set to `null`.
+- `events/{year}.json`: one file per year, each holding every current event for that year with source, status, rating, wind estimate, path, endpoints, impacts, and narrative where available. Confirmed NCEI rows are full event records. Preliminary IEM rows are point reports with unavailable survey fields set to `null` and available report attribution retained in `sourceAttribution` and `wfo`.
 
 Nothing is trimmed or truncated: full history stays available, just partitioned by year instead of shipped as one array. The consumer fetches only the year (or years) a visitor actually asks for.
 
