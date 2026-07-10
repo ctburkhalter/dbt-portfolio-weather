@@ -1,9 +1,9 @@
-name: Refresh tornado dashboard data
+name: Refresh tornado event explorer data
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "0 6 * * *"
 
 permissions:
   contents: read
@@ -36,17 +36,17 @@ jobs:
         with:
           path: /tmp/ncei-storm-events
           key: ncei-recent-${{ steps.date.outputs.today }}
-      # NCEI bulk files are not republished on every hourly alert poll.
-      # Caching by day avoids re-downloading and reprocessing them on every run.
+      # The event explorer refreshes daily, and the current-year NCEI bulk files
+      # are cached by UTC date to avoid duplicate source downloads on reruns.
       - if: steps.ncei-cache.outputs.cache-hit != 'true'
         run: python ingestion/refresh_recent_ncei.py --output-dir /tmp/ncei-storm-events
       - run: for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
-      - run: python ingestion/fetch_nws_alerts.py
       - run: python ingestion/fetch_preliminary_tornado_reports.py
-      - run: DBT_PROFILES_DIR=. dbt source freshness
       - run: DBT_PROFILES_DIR=. dbt build
+      - run: cp target/run_results.json target/build_run_results.json
       - run: DBT_PROFILES_DIR=. dbt docs generate
       - run: python scripts/publish_dashboard.py --output public/data
+      - run: python scripts/publish_project_explorer.py --output public/data/dbt-project.v1.json
       - run: cp -R target public/dbt-docs
       - uses: actions/upload-pages-artifact@v3
         with:

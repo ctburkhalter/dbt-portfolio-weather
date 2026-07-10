@@ -46,8 +46,3 @@ models:
           - accepted_values:
               arguments:
                 values: ["ncei_storm_events", "iem_lsr"]
-  - name: fct_active_tornado_alerts
-    description: Current NWS alert products, not confirmed tornado events.
-    columns:
-      - name: alert_id
-        tests: [not_null, unique]

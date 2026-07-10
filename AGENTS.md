@@ -9,12 +9,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python ingestion/load_ncei_events.py --input data/StormEvents_details.csv.gz
-python ingestion/fetch_nws_alerts.py
 python ingestion/fetch_preliminary_tornado_reports.py
-DBT_PROFILES_DIR=. dbt source freshness
 DBT_PROFILES_DIR=. dbt build
+cp target/run_results.json target/build_run_results.json
 DBT_PROFILES_DIR=. dbt docs generate
 python scripts/publish_dashboard.py --output public/data
+python scripts/publish_project_explorer.py --output public/data/dbt-project.v1.json
 python -m unittest discover -s tests
 ```
 
@@ -22,14 +22,13 @@ Use `DBT_DUCKDB_PATH=/tmp/south-alabama-tornado.duckdb` for disposable local val
 
 ## Architecture and contracts
 
-- Python ingests NCEI historical confirmed tornado events, current NWS Tornado Watch and Tornado Warning products, and preliminary Iowa State Mesonet Local Storm Reports into DuckDB.
+- Python ingests NCEI historical confirmed tornado events and preliminary Iowa State Mesonet Local Storm Reports into DuckDB.
 - dbt models source data through `src`, `dim`, `fct`, and `marts` layers. Preserve that lineage in model changes.
-- `scripts/publish_dashboard.py` creates the versioned `portfolio-weather.v1.json` contract (dashboard metadata, live status, marts, event coverage, `eventYearIndex`) and one `events/{year}.json` file per year of current events, consumed by the portfolio's same-origin weather API. No individual events are embedded in `portfolio-weather.v1.json`; keep it that way so it stays cacheable.
-- GitHub Actions refreshes recent NCEI files, validates source freshness and dbt tests, then publishes JSON and dbt docs through GitHub Pages. A failed run must leave the previous published artifact available.
+- `scripts/publish_dashboard.py` creates the versioned `portfolio-weather.v1.json` event-discovery contract (event coverage and `eventYearIndex`) and one `events/{year}.json` file per year of current events. `scripts/publish_project_explorer.py` creates `dbt-project.v1.json` from the successful dbt manifest, catalog, and saved build run results, including curated public source files and commit-pinned links. Save `target/build_run_results.json` before `dbt docs generate`, which replaces `run_results.json`. Both contracts are consumed by the portfolio's same-origin weather API. No individual events are embedded in `portfolio-weather.v1.json`; keep it that way so it stays cacheable.
+- GitHub Actions refreshes recent NCEI files daily, validates dbt tests, then publishes JSON and dbt docs through GitHub Pages. A failed run must leave the previous published artifact available.
 
 ## Data semantics and guardrails
 
-- NWS alerts are active forecast products, not confirmed tornadoes. Do not join alerts to historical events as causal attribution.
 - Preliminary IEM Local Storm Reports are point reports, not final confirmed NCEI events. Keep `record_status` and `source_system` visible when combining them with confirmed events.
 - NCEI F and EF ratings are damage-based classifications. Wind ranges must be labeled estimates, never measured wind speeds.
 - Begin and end coordinates are event endpoints. If rendered as a connection, label it an approximate endpoint connection, not a surveyed tornado track.
