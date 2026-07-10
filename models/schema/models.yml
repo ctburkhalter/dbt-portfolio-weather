@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: dim_tornado_intensity
+    description: Normalized F and EF damage ratings. Unrecognized or missing source ratings are represented by the explicit `Unknown` member.
+    columns:
+      - name: rating_code
+        tests: [not_null, unique]
+      - name: scale_system
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["F", "EF", "Unknown"]
+  - name: fct_tornado_events
+    description: One confirmed NCEI tornado event. Start and end coordinates are endpoints, not a surveyed track geometry.
+    columns:
+      - name: event_id
+        tests: [not_null, unique]
+      - name: injuries
+        tests:
+          - non_negative
+      - name: fatalities
+        tests:
+          - non_negative
+  - name: fct_active_tornado_alerts
+    description: Current NWS alert products, not confirmed tornado events.
+    columns:
+      - name: alert_id
+        tests: [not_null, unique]

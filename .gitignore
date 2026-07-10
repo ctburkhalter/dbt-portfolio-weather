@@ -1,0 +1,20 @@
+# Local dbt and DuckDB output
+weather.duckdb
+target/
+dbt_packages/
+logs/
+public/
+.user.yml
+
+# Python bytecode and operating-system files
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# Local environments and editor state
+.venv/
+.env
+.env.*
+!.env.example
+.vscode/
+dbt_internal_packages/

@@ -1,0 +1,54 @@
+name: Refresh tornado dashboard data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: tornado-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests
+      - run: python ingestion/load_ncei_events.py --input data/StormEvents_details.csv.gz
+      - id: date
+        run: echo "today=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+      - name: Cache current-year NCEI bulk files
+        id: ncei-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ncei-storm-events
+          key: ncei-recent-${{ steps.date.outputs.today }}
+      # NCEI bulk files are not republished on a 15-minute cadence, unlike NWS alerts.
+      # Caching by day avoids re-downloading and reprocessing them on every alert poll.
+      - if: steps.ncei-cache.outputs.cache-hit != 'true'
+        run: python ingestion/refresh_recent_ncei.py --output-dir /tmp/ncei-storm-events
+      - run: for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
+      - run: python ingestion/fetch_nws_alerts.py
+      - run: DBT_PROFILES_DIR=. dbt source freshness
+      - run: DBT_PROFILES_DIR=. dbt build
+      - run: DBT_PROFILES_DIR=. dbt docs generate
+      - run: python scripts/publish_dashboard.py --output public/data
+      - run: cp -R target public/dbt-docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@v4

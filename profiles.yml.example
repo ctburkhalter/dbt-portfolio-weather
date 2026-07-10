@@ -1,0 +1,7 @@
+south_alabama_tornado_watch:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'weather.duckdb') }}"
+      threads: 4
