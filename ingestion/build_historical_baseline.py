@@ -14,18 +14,11 @@ from pathlib import Path
 
 import requests
 
+from load_ncei_events import COHORT_STATES, STATE_NAME_TO_CODE
 from refresh_recent_ncei import INDEX_URL, latest_filename
 
-COHORT_STATES = {
-    "AL", "AR", "GA", "LA", "MS", "TN", "CO", "IA", "KS", "NE", "OK", "SD", "TX",
-}
-STATE_NAME_TO_CODE = {
-    "ALABAMA": "AL", "ARKANSAS": "AR", "GEORGIA": "GA", "LOUISIANA": "LA", "MISSISSIPPI": "MS",
-    "TENNESSEE": "TN", "COLORADO": "CO", "IOWA": "IA", "KANSAS": "KS", "NEBRASKA": "NE",
-    "OKLAHOMA": "OK", "SOUTH DAKOTA": "SD", "TEXAS": "TX",
-}
 OUTPUT_FIELDS = [
-    "EVENT_ID", "EVENT_TYPE", "STATE", "CZ_NAME", "BEGIN_DATE_TIME", "BEGIN_LOCATION", "END_LOCATION",
+    "EVENT_ID", "EVENT_TYPE", "STATE", "CZ_NAME", "BEGIN_DATE_TIME", "CZ_TIMEZONE", "BEGIN_LOCATION", "END_LOCATION",
     "TOR_F_SCALE", "TOR_LENGTH", "TOR_WIDTH", "BEGIN_LAT", "BEGIN_LON", "END_LAT", "END_LON",
     "INJURIES_DIRECT", "DEATHS_DIRECT", "DAMAGE_PROPERTY", "DAMAGE_CROPS", "EVENT_NARRATIVE",
 ]
@@ -83,7 +76,12 @@ def main() -> None:
     index_response.raise_for_status()
     index = index_response.text
     years = list(range(args.start_year, args.end_year + 1))
-    filenames = [latest_filename(index, year) for year in years]
+    filenames = []
+    for year in years:
+        filename = latest_filename(index, year)
+        if filename is None:
+            raise RuntimeError(f"No NCEI bulk file found for {year}")
+        filenames.append(filename)
 
     if args.append and not args.output.exists():
         raise FileNotFoundError("--append requires an existing --output baseline")

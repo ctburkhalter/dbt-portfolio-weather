@@ -1,4 +1,4 @@
-"""Export dbt marts to the JSON contracts consumed by the portfolio site."""
+"""Export the current tornado event fact table to the JSON contracts consumed by the portfolio site."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from pathlib import Path
 
 import duckdb
 
+# Next.js's fetch cache skips any response body over 2MB; this is that same
+# budget, documented in README.md and METHODOLOGY.md, enforced here so a
+# regression fails loudly instead of silently producing an uncacheable shard.
+MAX_SHARD_BYTES = 2 * 1024 * 1024
+
+
 def records(con: duckdb.DuckDBPyConnection, query: str) -> list[dict]:
     cursor = con.execute(query)
     columns = [column[0] for column in cursor.description]
@@ -19,6 +25,13 @@ def records(con: duckdb.DuckDBPyConnection, query: str) -> list[dict]:
 
 def iso(value: object) -> str | None:
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else value
+
+
+def iso_with_offset(value: object, offset: str | None) -> str | None:
+    formatted = iso(value)
+    if formatted is None or not offset:
+        return formatted
+    return f"{formatted}{offset}"
 
 
 def main() -> None:
@@ -32,9 +45,12 @@ def main() -> None:
     con = duckdb.connect(args.database, read_only=True)
     coverage = records(con, """
       select
-        max(occurred_at) filter (where record_status = 'confirmed') as confirmed_through,
-        min(occurred_at) filter (where record_status = 'preliminary') as preliminary_from,
-        max(occurred_at) filter (where record_status = 'preliminary') as preliminary_through,
+        arg_max(occurred_at, occurred_at_utc) filter (where record_status = 'confirmed') as confirmed_through,
+        arg_max(occurred_at_utc_offset, occurred_at_utc) filter (where record_status = 'confirmed') as confirmed_through_offset,
+        arg_min(occurred_at, occurred_at_utc) filter (where record_status = 'preliminary') as preliminary_from,
+        arg_min(occurred_at_utc_offset, occurred_at_utc) filter (where record_status = 'preliminary') as preliminary_from_offset,
+        arg_max(occurred_at, occurred_at_utc) filter (where record_status = 'preliminary') as preliminary_through,
+        arg_max(occurred_at_utc_offset, occurred_at_utc) filter (where record_status = 'preliminary') as preliminary_through_offset,
         count(*) filter (where record_status = 'preliminary') as preliminary_count
       from fct.fct_tornado_events_current
     """)[0]
@@ -46,7 +62,7 @@ def main() -> None:
         if row["is_alabama"]: regions.append("alabama")
         if row["is_dixie_cohort"]: regions.append("dixie")
         if row["is_tornado_cohort"]: regions.append("tornado")
-        occurred_at = iso(row["occurred_at"])
+        occurred_at = iso_with_offset(row["occurred_at"], row["occurred_at_utc_offset"])
         events_by_year[row["occurred_at"].year].append({
             "eventId": row["event_id"], "regionIds": regions, "occurredAt": occurred_at, "state": row["state"],
             "county": row["county"], "beginLocation": row["begin_location"], "endLocation": row["end_location"],
@@ -65,10 +81,14 @@ def main() -> None:
     event_year_index = []
     for year in sorted(events_by_year, reverse=True):
         year_events = events_by_year[year]
-        (events_dir / f"{year}.json").write_text(
-            json.dumps({"schemaVersion": "1.0", "year": year, "events": year_events}, default=str, separators=(",", ":")),
-            encoding="utf-8",
-        )
+        shard_path = events_dir / f"{year}.json"
+        shard_bytes = json.dumps({"schemaVersion": "1.0", "year": year, "events": year_events}, default=str, separators=(",", ":")).encode("utf-8")
+        if len(shard_bytes) > MAX_SHARD_BYTES:
+            raise ValueError(
+                f"events/{year}.json is {len(shard_bytes)} bytes, over the documented {MAX_SHARD_BYTES}-byte budget "
+                "(README.md and METHODOLOGY.md); Next.js's fetch cache skips responses over 2MB."
+            )
+        shard_path.write_bytes(shard_bytes)
         event_year_index.append({"year": year, "count": len(year_events)})
 
     payload = {
@@ -77,9 +97,9 @@ def main() -> None:
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "sourceCoverage": "Filtered NOAA NCEI confirmed Storm Events records and preliminary Iowa State Mesonet Local Storm Reports after the latest NCEI cutoff for the documented project cohorts.",
         "eventCoverage": {
-            "confirmedThrough": iso(coverage["confirmed_through"]),
-            "preliminaryFrom": iso(coverage["preliminary_from"]),
-            "preliminaryThrough": iso(coverage["preliminary_through"]),
+            "confirmedThrough": iso_with_offset(coverage["confirmed_through"], coverage["confirmed_through_offset"]),
+            "preliminaryFrom": iso_with_offset(coverage["preliminary_from"], coverage["preliminary_from_offset"]),
+            "preliminaryThrough": iso_with_offset(coverage["preliminary_through"], coverage["preliminary_through_offset"]),
             "preliminaryCount": coverage["preliminary_count"],
         },
         "eventYearIndex": event_year_index,

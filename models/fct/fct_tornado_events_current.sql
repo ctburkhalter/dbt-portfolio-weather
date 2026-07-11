@@ -1,5 +1,9 @@
 with confirmed_cutoff as (
-  select max(occurred_at) as max_confirmed_occurred_at
+  -- occurred_at_utc is a UTC-equivalent naive timestamp for every source (see
+  -- src_ncei__tornado_events and src_iem__preliminary_tornado_reports), so
+  -- this cutoff compares absolute instants rather than mixing NCEI's local
+  -- wall-clock time against IEM's UTC wall-clock time as raw strings.
+  select max(occurred_at_utc) as max_confirmed_occurred_at_utc
   from {{ ref('fct_tornado_events') }}
 ),
 
@@ -7,6 +11,8 @@ confirmed as (
   select
     event_id,
     occurred_at,
+    occurred_at_utc,
+    occurred_at_utc_offset,
     state,
     county,
     begin_location,
@@ -45,6 +51,8 @@ preliminary as (
   select
     event.event_id,
     event.occurred_at,
+    event.occurred_at_utc,
+    event.occurred_at_utc_offset,
     event.state,
     event.county,
     event.begin_location,
@@ -78,7 +86,7 @@ preliminary as (
     false as is_surveyed_track
   from {{ ref('fct_preliminary_tornado_reports') }} as event
   cross join confirmed_cutoff
-  where event.occurred_at > confirmed_cutoff.max_confirmed_occurred_at
+  where event.occurred_at_utc > confirmed_cutoff.max_confirmed_occurred_at_utc
 )
 
 select * from confirmed

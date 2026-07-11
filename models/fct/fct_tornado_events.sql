@@ -1,6 +1,8 @@
 select
   event.event_id,
   event.occurred_at,
+  event.occurred_at_utc,
+  event.occurred_at_utc_offset,
   event.state,
   event.county,
   event.begin_location,

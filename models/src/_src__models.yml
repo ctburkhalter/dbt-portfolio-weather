@@ -1,0 +1,108 @@
+version: 2
+
+models:
+  - name: src_ncei__tornado_events
+    description: >
+      Typed NCEI Storm Events tornado records normalized from the raw source, filtered to
+      event_type = Tornado. occurred_at recovers NCEI's local wall-clock reading from the raw
+      offset-bearing string (see load_ncei_events.parse_timestamp); occurred_at_utc is the
+      UTC-equivalent instant used for cross-source comparisons; occurred_at_utc_offset is the
+      parsed +HH:MM/-HH:MM suffix.
+    columns:
+      - name: event_id
+        description: NCEI EVENT_ID, cast to varchar.
+      - name: state
+        description: "{{ doc('state') }}"
+      - name: county
+        description: "{{ doc('county') }}"
+      - name: occurred_at
+        description: Local wall-clock event time as recorded by NCEI, offset stripped.
+      - name: occurred_at_utc
+        description: UTC-equivalent instant, deterministically normalized from the raw offset-bearing string regardless of session timezone.
+      - name: occurred_at_utc_offset
+        description: Parsed UTC offset suffix (for example -06:00) derived from NCEI's CZ_TIMEZONE.
+      - name: begin_location
+        description: "{{ doc('begin_location') }}"
+      - name: end_location
+        description: "{{ doc('end_location') }}"
+      - name: rating_code
+        description: "Raw F or EF rating code as recorded by NCEI (TOR_F_SCALE), upper-cased but not yet normalized against the EF0-EF5/F0-F5 pattern. See dim_tornado_intensity and the normalized_rating_code macro for the normalization applied downstream."
+      - name: path_length_miles
+        description: "{{ doc('path_length_miles') }}"
+      - name: path_width_yards
+        description: "{{ doc('path_width_yards') }}"
+      - name: begin_latitude
+        description: "{{ doc('begin_latitude') }}"
+      - name: begin_longitude
+        description: "{{ doc('begin_longitude') }}"
+      - name: end_latitude
+        description: "{{ doc('end_latitude') }}"
+      - name: end_longitude
+        description: "{{ doc('end_longitude') }}"
+      - name: injuries
+        description: "{{ doc('injuries') }}"
+      - name: fatalities
+        description: "{{ doc('fatalities') }}"
+      - name: property_damage_usd
+        description: "{{ doc('property_damage_usd') }}"
+      - name: crop_damage_usd
+        description: "{{ doc('crop_damage_usd') }}"
+      - name: event_narrative
+        description: "{{ doc('narrative') }}"
+      - name: source_url
+        description: "{{ doc('source_url') }}"
+  - name: src_iem__preliminary_tornado_reports
+    description: >
+      Typed Iowa State Mesonet Local Storm Report tornado point reports normalized from the raw
+      source, filtered to report_type = TORNADO. IEM reports are ingested in UTC, so occurred_at
+      and occurred_at_utc are identical here and occurred_at_utc_offset is always +00:00, unlike
+      the NCEI source which carries mixed local offsets.
+    columns:
+      - name: event_id
+        description: "IEM report_id, cast to varchar. A hash of report time, office, type, location, and remark text (see fetch_preliminary_tornado_reports.report_id); a later correction to a report's remark changes this id."
+      - name: occurred_at
+        description: Report time in UTC (IEM's native basis).
+      - name: occurred_at_utc
+        description: "Identical to occurred_at for every row: IEM's native basis is already UTC, so no normalization is needed."
+      - name: occurred_at_utc_offset
+        description: "Always +00:00."
+      - name: state
+        description: "{{ doc('state') }}"
+      - name: county
+        description: "{{ doc('county') }}"
+      - name: begin_location
+        description: "{{ doc('begin_location') }}"
+      - name: end_location
+        description: "{{ doc('end_location') }}"
+      - name: rating_code
+        description: "Always null. Local Storm Reports do not include a damage-based F or EF rating (see docs/METHODOLOGY.md Safety and interpretation)."
+      - name: path_length_miles
+        description: "{{ doc('path_length_miles') }}"
+      - name: path_width_yards
+        description: "{{ doc('path_width_yards') }}"
+      - name: begin_latitude
+        description: "{{ doc('begin_latitude') }}"
+      - name: begin_longitude
+        description: "{{ doc('begin_longitude') }}"
+      - name: end_latitude
+        description: "{{ doc('end_latitude') }}"
+      - name: end_longitude
+        description: "{{ doc('end_longitude') }}"
+      - name: injuries
+        description: "{{ doc('injuries') }}"
+      - name: fatalities
+        description: "{{ doc('fatalities') }}"
+      - name: property_damage_usd
+        description: "{{ doc('property_damage_usd') }}"
+      - name: crop_damage_usd
+        description: "{{ doc('crop_damage_usd') }}"
+      - name: event_narrative
+        description: "{{ doc('narrative') }}"
+      - name: source_url
+        description: "{{ doc('source_url') }}"
+      - name: report_source
+        description: "{{ doc('source_attribution') }}"
+      - name: wfo
+        description: "{{ doc('wfo') }}"
+      - name: fetched_at
+        description: "UTC timestamp this ingestion run retrieved the report from Iowa State Mesonet, not the event time. Operational bookkeeping only, not part of the published event contract."

@@ -13,12 +13,17 @@ INDEX_URL = "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/"
 BASELINE_END_YEAR = 2024
 
 
-def latest_filename(index: str, year: int) -> str:
+def latest_filename(index: str, year: int) -> str | None:
+    """Return the newest NCEI details filename for year, or None if NCEI hasn't published one yet.
+
+    Callers decide whether a missing file is expected (the current calendar
+    year, which NCEI typically doesn't publish until days to weeks in) or an
+    error (any past year, where a miss likely means the index format changed
+    or a real file is missing).
+    """
     pattern = re.compile(rf"StormEvents_details-ftp_v1\.0_d{year}_c\d{{8}}\.csv\.gz")
     matches = sorted(set(pattern.findall(index)))
-    if not matches:
-        raise RuntimeError(f"No NCEI bulk file found for {year}")
-    return matches[-1]
+    return matches[-1] if matches else None
 
 
 def main() -> None:
@@ -37,6 +42,11 @@ def main() -> None:
 
     for year in args.years:
         filename = latest_filename(index_response.text, year)
+        if filename is None:
+            if year >= current_year:
+                print(f"No NCEI bulk file published yet for {year}; skipping this run.")
+                continue
+            raise RuntimeError(f"No NCEI bulk file found for {year}")
         destination = args.output_dir / filename
         response = requests.get(f"{INDEX_URL}{filename}", stream=True, timeout=120)
         response.raise_for_status()

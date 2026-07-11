@@ -16,7 +16,7 @@ PUBLIC_ROOTS = ("ingestion", "macros", "models", "tests")
 PUBLIC_FILES = {
     ".github/workflows/refresh.yml",
     "dbt_project.yml",
-    "profiles.yml.example",
+    "profiles.yml",
     "scripts/publish_dashboard.py",
     "scripts/publish_project_explorer.py",
     "docs/METHODOLOGY.md",
@@ -79,25 +79,48 @@ def result_statuses(run_results: dict[str, Any]) -> dict[str, str]:
     return {result["unique_id"]: result["status"] for result in run_results.get("results", []) if "unique_id" in result}
 
 
+def catalog_entry_for(catalog: dict[str, Any], unique_id: str) -> dict[str, Any]:
+    return catalog.get("nodes", {}).get(unique_id) or catalog.get("sources", {}).get(unique_id, {})
+
+
 def relation_for(catalog: dict[str, Any], unique_id: str) -> str | None:
-    catalog_entry = catalog.get("nodes", {}).get(unique_id) or catalog.get("sources", {}).get(unique_id, {})
-    metadata = catalog_entry.get("metadata", {})
+    metadata = catalog_entry_for(catalog, unique_id).get("metadata", {})
     if not metadata.get("schema") or not metadata.get("name"):
         return None
     return f"{metadata['schema']}.{metadata['name']}"
 
 
 def project_node(unique_id: str, node: dict[str, Any], catalog: dict[str, Any], statuses: dict[str, str], resource_type: str) -> dict[str, Any]:
-    columns = node.get("columns", {})
+    # Column names and types come from catalog.json: the actual introspected
+    # columns of the built table or view, always complete regardless of
+    # models.yml documentation coverage. Descriptions come from
+    # manifest.json, which only carries a column entry when a human typed
+    # one into models.yml (even a bare `tests:`-only entry, no description
+    # required). Sourcing columns from the manifest alone undercounted every
+    # model down to whatever fraction of its real columns happened to have a
+    # YAML entry (dim_geography showed 0 of its 5 real columns before this
+    # fix). Manifest column keys are matched by name against catalog column
+    # names; dbt lowercases unquoted identifiers in both, so this matches
+    # reliably for this project's unquoted lowercase columns.
+    catalog_columns = catalog_entry_for(catalog, unique_id).get("columns", {})
+    manifest_columns = node.get("columns", {})
+    columns = [
+        {
+            "name": catalog_column["name"],
+            "description": manifest_columns.get(catalog_column["name"], {}).get("description", ""),
+            "dataType": catalog_column.get("type"),
+        }
+        for catalog_column in sorted(catalog_columns.values(), key=lambda column: column.get("index", 0))
+    ]
     return {
         "id": unique_id,
         "name": node["name"],
         "resourceType": resource_type,
         "layer": "source" if resource_type == "source" else node.get("path", "").split("/", 1)[0] or "model",
-        "path": node.get("original_file_path", "models/sources.yml" if resource_type == "source" else ""),
+        "path": node.get("original_file_path", "models/src/_sources.yml" if resource_type == "source" else ""),
         "description": node.get("description", ""),
         "relation": relation_for(catalog, unique_id),
-        "columns": [{"name": column["name"], "description": column.get("description", ""), "dataType": column.get("data_type")} for column in columns.values()],
+        "columns": columns,
         "upstream": list(node.get("depends_on", {}).get("nodes", [])) if resource_type == "model" else [],
         "downstream": [],
         "tests": [],
