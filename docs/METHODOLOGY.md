@@ -24,7 +24,7 @@ NCEI bulk files + IEM Local Storm Reports
 raw DuckDB tables
           |
           v
-src normalization models
+source-system staging views
           |
           +--> dimensions: geography, tornado intensity
           |
@@ -38,7 +38,7 @@ marts: seasonality, annual trends, county impact
 versioned event JSON + dbt project explorer + dbt docs
 ```
 
-`src` models type and normalize source values without adding analytical interpretation. Dimensions define reusable cohort and F or EF intensity definitions. Facts preserve the detailed event and report grains. `fct_tornado_events_current` keeps all confirmed NCEI records and appends preliminary IEM reports only after the latest confirmed NCEI timestamp, comparing both sides by their UTC-equivalent instant (see Timestamp offsets) rather than raw local time. Marts remain documented aggregate models in the project graph. The event export retains event-level fields in separate year shards so the event explorer can inspect source-backed records directly.
+Staging views normalize one source relation each. Ephemeral intermediate models apply cohort membership and conform the source shapes. The contracted `fct_tornado_events` mart keeps confirmed NCEI events and appends preliminary IEM reports only after the latest confirmed UTC instant. A deterministic seed governs F and EF intensity definitions.
 
 ## Cohorts
 
@@ -46,7 +46,7 @@ versioned event JSON + dbt project explorer + dbt docs
 - Dixie comparison cohort: `AL`, `AR`, `GA`, `LA`, `MS`, `TN`
 - Tornado comparison cohort: `CO`, `IA`, `KS`, `NE`, `OK`, `SD`, `TX`
 
-These are project-defined analytical cohorts, not official meteorological boundaries. They are used to give portfolio visitors a clear comparison frame without representing an authoritative definition of Dixie Alley or Tornado Alley. `macros/cohort_flags.sql` derives the three membership flags from a state column in one place, used by both `dim_geography` and `fct_preliminary_tornado_reports`.
+These are project-defined analytical cohorts, not official meteorological boundaries. `macros/cohort_flags.sql` derives the three membership flags in one place for both intermediate source-conformance branches.
 
 ## Timestamp offsets
 
@@ -55,7 +55,7 @@ Every published `occurredAt` value carries an explicit UTC offset suffix; the pi
 - **Confirmed NCEI rows** keep NCEI's local wall-clock reading (the digits are not shifted) and append the offset implied by the source's `CZ_TIMEZONE` field, for example `2020-01-01T14:30:00-06:00` for a Central time event. `ingestion/load_ncei_events.py::parse_cz_timezone_offset` recognizes both the modern explicit-offset NCEI form (`CST-6`) and the older bare-abbreviation form used in early Storm Events years (`CST`, with no digit), and defaults to `-06:00` (CST, the modal timezone across this project's cohort states) for any value it doesn't recognize.
 - **Preliminary IEM rows** are ingested in UTC and always carry a `+00:00` suffix.
 
-Internally, `src_ncei__tornado_events` and `src_iem__preliminary_tornado_reports` also expose `occurred_at_utc`, a UTC-equivalent instant used only for cross-source comparisons (the `fct_tornado_events_current` cutoff), and `occurred_at_utc_offset`, the raw offset string reattached to `occurred_at` at publish time. Year-shard bucketing (`events/{year}.json`) is always based on the event-local year from `occurred_at`, not the UTC-shifted year, so a late-December local event never moves to the wrong year's shard.
+Internally, `stg_ncei__tornado_events` and `stg_iem__preliminary_tornado_reports` expose `occurred_at_utc`, a UTC-equivalent instant used for the canonical fact cutoff, and `occurred_at_utc_offset`, the offset reattached at publish time. Year-shard bucketing is based on the event-local year from `occurred_at`, so a late-December local event never moves to the wrong shard.
 
 ## Safety and interpretation
 
@@ -67,11 +67,11 @@ Internally, `src_ncei__tornado_events` and `src_iem__preliminary_tornado_reports
 
 ## Published interfaces
 
-The exporter creates versioned static contracts, all with `schemaVersion: "1.0"`:
+The exporter creates contracts under `data/v2/` with `schemaVersion: "2.0"`. The contract uses `eventKey` while retaining source-native `eventId`:
 
-- `data/portfolio-weather.v1.json`: event coverage metadata and an `eventYearIndex` (`{year, count}` per year with data) used by the weather route. It intentionally carries no individual event records, so it stays small enough for the consumer's fetch cache to hold.
-- `data/events/{year}.json`: one file per year of current events. Confirmed NCEI records include full detail (rating, wind estimate, path, endpoints, impacts, narrative, source). Preliminary IEM rows include point location, report text, `recordStatus`, `sourceSystem`, `sourceAttribution`, and `wfo`, with unavailable survey fields set to `null`. Nothing is trimmed; history is partitioned by year rather than shipped as a single array. Every `occurredAt` in these files carries an explicit UTC offset (see Timestamp offsets above), and the publisher enforces a 2MB per-file budget, raising rather than silently publishing an oversized shard.
-- `data/dbt-project.v1.json`: a compact projection of the successful run's dbt manifest, catalog, and saved build run results. The workflow preserves `target/build_run_results.json` before dbt docs generation replaces the active run-results file. The artifact exposes the public project file tree, source text, model and source descriptions, direct lineage, test outcomes, relation names, build summary, and commit-pinned source links for the portfolio's native project explorer.
+- `data/v2/portfolio-weather.json`: event coverage metadata and an `eventYearIndex` (`{year, count}` per year with data) used by the weather route. It intentionally carries no individual event records, so it stays small enough for the consumer's fetch cache to hold.
+- `data/v2/events/{year}.json`: one file per year of current events. Confirmed NCEI records include full detail (rating, wind estimate, path, endpoints, impacts, narrative, source). Preliminary IEM rows include point location, report text, `recordStatus`, `sourceSystem`, `sourceAttribution`, and `wfo`, with unavailable survey fields set to `null`. Nothing is trimmed; history is partitioned by year rather than shipped as a single array. Every `occurredAt` in these files carries an explicit UTC offset (see Timestamp offsets above), and the publisher enforces a 2MB per-file budget, raising rather than silently publishing an oversized shard.
+- `data/v2/dbt-project.json`: a compact projection of the successful run's dbt manifest, catalog, and saved build run results. The workflow preserves `target/build_run_results.json` before dbt docs generation replaces the active run-results file. The artifact exposes the public project file tree, source text, model and source descriptions, direct lineage, test outcomes, relation names, build summary, and commit-pinned source links for the portfolio's native project explorer.
 
 The consumer website retrieves these through same-origin API routes. It validates the contract version, fetches only the year (or year range) a visitor selects, applies bounded event filters server-side, caches event and project-explorer data for 15 minutes, and retains the most recent successful data during upstream failures. The project explorer never calls the GitHub API from a visitor's browser.
 

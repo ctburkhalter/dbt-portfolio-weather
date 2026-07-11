@@ -1,0 +1,20 @@
+version: 2
+models:
+  - name: stg_ncei__tornado_events
+    description: One row per confirmed NCEI tornado event, renamed, typed, and normalized for downstream use.
+    columns:
+      - name: event_id
+        description: Source-native NCEI event identifier.
+        data_tests: [not_null, unique]
+      - name: occurred_at
+        description: NCEI local wall-clock event timestamp.
+        data_tests: [not_null]
+      - name: occurred_at_utc
+        description: UTC-equivalent event instant used for cross-source comparisons.
+        data_tests: [not_null]
+      - name: occurred_at_utc_offset
+        description: Explicit UTC offset retained for publication.
+        data_tests: [not_null]
+      - name: state
+        description: Two-letter state code.
+        data_tests: [not_null]

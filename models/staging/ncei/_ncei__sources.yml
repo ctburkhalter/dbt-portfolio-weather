@@ -1,0 +1,20 @@
+version: 2
+sources:
+  - name: ncei
+    description: NOAA NCEI confirmed Storm Events data loaded by the Python ingestion layer.
+    schema: raw
+    tables:
+      - name: tornado_events
+        identifier: ncei_tornado_events
+        description: One raw confirmed NCEI tornado event in the documented project cohorts.
+        columns:
+          - name: event_id
+            description: Source-native NCEI event identifier.
+            data_tests: [not_null, unique]
+          - name: event_type
+            description: NCEI event type, restricted to Tornado by ingestion.
+            data_tests:
+              - accepted_values:
+                  arguments: {values: [Tornado]}
+          - name: occurred_at
+            description: Offset-bearing ISO-8601 local event timestamp produced by ingestion.

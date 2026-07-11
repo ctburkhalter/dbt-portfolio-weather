@@ -48,20 +48,21 @@ jobs:
       - run: shopt -s nullglob; for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
         shell: bash
       - run: python ingestion/fetch_preliminary_tornado_reports.py
-      - run: DBT_PROFILES_DIR=. dbt build
+      - run: DBT_PROFILES_DIR=. dbt build --target prod --fail-fast
       # dbt docs generate overwrites target/run_results.json with its own
       # (uninteresting) results, so the build's real model and test outcomes
       # are saved first for scripts/publish_project_explorer.py to read.
       - run: cp target/run_results.json target/build_run_results.json
-      - run: DBT_PROFILES_DIR=. dbt docs generate
-      - run: python scripts/publish_dashboard.py --output public/data
-      - run: python scripts/publish_project_explorer.py --output public/data/dbt-project.v1.json
+      - run: DBT_PROFILES_DIR=. dbt docs generate --target prod
+      - run: python scripts/publish_dashboard.py --output /tmp/weather-pages/data/v2
+      - run: python scripts/publish_project_explorer.py --output /tmp/weather-pages/data/v2/dbt-project.json
+      - run: python tests/contract_smoke_check.py --output /tmp/weather-pages/data/v2
       # dbt docs' single-page app only fetches these three files relative to
       # itself; the rest of target/ is compiled SQL and run-internal state
       # that does not belong in the public Pages artifact.
-      - run: mkdir -p public/dbt-docs && cp target/index.html target/manifest.json target/catalog.json public/dbt-docs/
+      - run: mkdir -p /tmp/weather-pages/dbt-docs && cp target/index.html target/manifest.json target/catalog.json /tmp/weather-pages/dbt-docs/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public
+          path: /tmp/weather-pages
       - id: deployment
         uses: actions/deploy-pages@v4

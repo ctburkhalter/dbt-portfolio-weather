@@ -25,17 +25,17 @@ _UTC_OFFSET_SUFFIX = re.compile(r"(Z|[+-]\d{2}:\d{2})$")
 def check(output_dir: Path) -> list[str]:
     failures: list[str] = []
 
-    index_path = output_dir / "portfolio-weather.v1.json"
+    index_path = output_dir / "portfolio-weather.json"
     if not index_path.exists():
         return [f"{index_path} does not exist"]
     index = json.loads(index_path.read_text(encoding="utf-8"))
 
-    if index.get("schemaVersion") != "1.0":
-        failures.append(f"portfolio-weather.v1.json schemaVersion is {index.get('schemaVersion')!r}, expected '1.0'")
+    if index.get("schemaVersion") != "2.0":
+        failures.append(f"index schemaVersion is {index.get('schemaVersion')!r}, expected '2.0'")
 
     missing_keys = REQUIRED_INDEX_KEYS - index.keys()
     if missing_keys:
-        failures.append(f"portfolio-weather.v1.json is missing required top-level keys: {sorted(missing_keys)}")
+        failures.append(f"portfolio-weather.json is missing required top-level keys: {sorted(missing_keys)}")
 
     year_index = index.get("eventYearIndex", [])
     total_events = sum(entry.get("count", 0) for entry in year_index)
@@ -52,8 +52,10 @@ def check(output_dir: Path) -> list[str]:
         if shard_bytes > MAX_SHARD_BYTES:
             failures.append(f"{shard_path} is {shard_bytes} bytes, over the documented {MAX_SHARD_BYTES}-byte budget")
         shard = json.loads(shard_path.read_text(encoding="utf-8"))
-        if shard.get("schemaVersion") != "1.0":
-            failures.append(f"{shard_path} schemaVersion is {shard.get('schemaVersion')!r}, expected '1.0'")
+        if shard.get("schemaVersion") != "2.0":
+            failures.append(f"{shard_path} schemaVersion is {shard.get('schemaVersion')!r}, expected '2.0'")
+        if any(not event.get("eventKey") for event in shard.get("events", [])):
+            failures.append(f"{shard_path} contains a v2 event without eventKey")
         for event in shard.get("events", []):
             occurred_at = event.get("occurredAt")
             if not occurred_at or not _UTC_OFFSET_SUFFIX.search(occurred_at):
@@ -64,7 +66,7 @@ def check(output_dir: Path) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="public/data", help="Directory holding the published portfolio-weather.v1.json and events/ shards.")
+    parser.add_argument("--output", default="public/data/v2", help="Directory holding the v2 portfolio-weather.json and events/ shards.")
     args = parser.parse_args()
 
     failures = check(Path(args.output))
