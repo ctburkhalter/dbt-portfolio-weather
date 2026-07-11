@@ -19,6 +19,8 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests
+      - run: yamllint dbt_project.yml profiles.yml models seeds .github/workflows
+      - run: DBT_PROFILES_DIR=. sqlfluff lint models tests/generic
       - name: Contract smoke test (demo fixture through dbt build and publish_dashboard.py)
         env:
           DBT_DUCKDB_PATH: /tmp/ci-check.duckdb
@@ -31,6 +33,10 @@ jobs:
           # it would otherwise hit the IEM API, which this fast, hermetic PR
           # gate should never depend on.
           python ingestion/fetch_preliminary_tornado_reports.py --start 2020-01-01T00:00:00+00:00 --end 2020-01-01T00:00:00+00:00 --database "$DBT_DUCKDB_PATH"
-          dbt build
-          python scripts/publish_dashboard.py --database "$DBT_DUCKDB_PATH" --output /tmp/ci-check-public/data
-          python tests/contract_smoke_check.py --output /tmp/ci-check-public/data
+          dbt parse --target ci
+          dbt build --target ci --fail-fast
+          cp target/run_results.json target/build_run_results.json
+          dbt docs generate --target ci
+          python scripts/publish_dashboard.py --database "$DBT_DUCKDB_PATH" --output /tmp/ci-check-public/data/v2
+          python scripts/publish_project_explorer.py --output /tmp/ci-check-public/data/v2/dbt-project.json
+          python tests/contract_smoke_check.py --output /tmp/ci-check-public/data/v2

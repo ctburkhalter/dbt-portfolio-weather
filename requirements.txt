@@ -1,2 +1,5 @@
 dbt-duckdb==1.9.6
 duckdb==1.1.3
+sqlfluff==3.4.2
+sqlfluff-templater-dbt==3.4.2
+yamllint==1.37.1

@@ -1,0 +1,125 @@
+version: 2
+
+models:
+  - name: dim_tornado_intensities
+    description: One row per governed F, EF, or Unknown damage-rating definition.
+    config:
+      meta: {owner: Chase Burkhalter, maturity: high, data_classification: public}
+    columns:
+      - {name: rating_code, description: Primary key and normalized damage-rating code, data_tests: [not_null, unique]}
+      - {name: scale_system, description: F, EF, or Unknown scale system}
+      - {name: rating_value, description: Numeric rating from 0 through 5 when known}
+      - {name: intensity_class, description: Weak, Strong, Violent, or Unknown grouping}
+      - {name: wind_estimate_low_mph, description: Damage-inferred lower wind estimate in mph}
+      - {name: wind_estimate_high_mph, description: Damage-inferred upper wind estimate in mph when bounded}
+      - {name: wind_estimate_note, description: Required interpretation caveat for the estimate}
+
+  - name: fct_tornado_events
+    description: One row per confirmed NCEI event or eligible preliminary IEM point report admitted to the current portfolio dataset.
+    config:
+      contract: {enforced: true}
+      meta:
+        owner: Chase Burkhalter
+        maturity: high
+        data_classification: public
+        primary_key: event_key
+        contract_version: "2.0"
+    columns:
+      - {name: event_key, data_type: varchar, description: Globally unique source-prefixed event key, data_tests: [not_null, unique]}
+      - {name: event_id, data_type: varchar, description: Source-native event or report identifier, data_tests: [not_null]}
+      - {name: occurred_at, data_type: timestamp, description: Source-local wall-clock time used for display and year bucketing, data_tests: [not_null]}
+      - {name: occurred_at_utc, data_type: timestamp, description: UTC-equivalent instant used for cross-source comparison, data_tests: [not_null]}
+      - {name: occurred_at_utc_offset, data_type: varchar, description: Explicit offset reattached during publication, data_tests: [not_null]}
+      - {name: state, data_type: varchar, description: Two-letter state code, data_tests: [not_null]}
+      - {name: county, data_type: varchar, description: Source-reported county or zone name}
+      - {name: begin_location, data_type: varchar, description: Source-reported beginning location}
+      - {name: end_location, data_type: varchar, description: Source-reported ending location when available}
+      - {name: rating_code, data_type: varchar, description: Normalized F or EF rating for confirmed events}
+      - {name: scale_system, data_type: varchar, description: F or EF damage scale for confirmed rated events}
+      - {name: rating_value, data_type: integer, description: Numeric damage rating from 0 through 5}
+      - {name: intensity_class, data_type: varchar, description: Rating-derived intensity group or Preliminary report}
+      - {name: wind_estimate_low_mph, data_type: integer, description: Damage-inferred lower wind estimate}
+      - {name: wind_estimate_high_mph, data_type: integer, description: Damage-inferred upper wind estimate when bounded}
+      - {name: wind_estimate_note, data_type: varchar, description: Required wind-estimate interpretation caveat}
+      - {name: path_length_miles, data_type: double, description: Confirmed source-reported path length}
+      - {name: path_width_yards, data_type: integer, description: Confirmed source-reported path width}
+      - {name: begin_latitude, data_type: double, description: Beginning point latitude}
+      - {name: begin_longitude, data_type: double, description: Beginning point longitude}
+      - {name: end_latitude, data_type: double, description: Ending point latitude when available}
+      - {name: end_longitude, data_type: double, description: Ending point longitude when available}
+      - {name: injuries, data_type: integer, description: Confirmed direct injuries, data_tests: [non_negative]}
+      - {name: fatalities, data_type: integer, description: Confirmed direct fatalities, data_tests: [non_negative]}
+      - {name: property_damage_usd, data_type: double, description: Source-reported property damage in USD}
+      - {name: crop_damage_usd, data_type: double, description: Source-reported crop damage in USD}
+      - {name: narrative, data_type: varchar, description: Source event or report narrative}
+      - {name: source_url, data_type: varchar, description: Public source landing or request URL}
+      - {name: is_alabama, data_type: boolean, description: Project-defined Alabama membership flag}
+      - {name: is_dixie_cohort, data_type: boolean, description: Project-defined Dixie comparison cohort flag}
+      - {name: is_tornado_cohort, data_type: boolean, description: Project-defined Tornado comparison cohort flag}
+      - {name: source_attribution, data_type: varchar, description: Preliminary report-source attribution}
+      - {name: wfo, data_type: varchar, description: Preliminary report Weather Forecast Office}
+      - name: record_status
+        data_type: varchar
+        description: Confirmed or preliminary source status.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [confirmed, preliminary]}
+      - name: source_system
+        data_type: varchar
+        description: Upstream system responsible for the row.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [ncei_storm_events, iem_lsr]}
+      - {name: is_surveyed_track, data_type: boolean, description: Always false because current coordinates are endpoints or report points}
+
+  - name: agg_tornado_events__annual
+    description: One row per local calendar year with Alabama confirmed and preliminary counts kept separate.
+    columns:
+      - {name: year, description: Local calendar year, data_tests: [not_null, unique]}
+      - {name: confirmed_tornadoes, description: Confirmed NCEI Alabama event count, data_tests: [non_negative]}
+      - {name: preliminary_tornado_reports, description: Preliminary IEM Alabama report count, data_tests: [non_negative]}
+      - {name: significant_tornadoes, description: Confirmed F2 or EF2 and higher event count, data_tests: [non_negative]}
+
+  - name: agg_tornado_events__county
+    description: One row per Alabama state and county pair with confirmed impacts and preliminary reports kept separate.
+    columns:
+      - {name: state, description: Two-letter state code, data_tests: [not_null]}
+      - {name: county, description: Source-reported county or zone name}
+      - {name: confirmed_tornadoes, description: Confirmed event count, data_tests: [non_negative]}
+      - {name: preliminary_tornado_reports, description: Preliminary report count, data_tests: [non_negative]}
+      - {name: significant_tornadoes, description: Confirmed F2 or EF2 and higher event count, data_tests: [non_negative]}
+      - {name: injuries, description: Confirmed direct injury total, data_tests: [non_negative]}
+      - {name: max_rating, description: Highest confirmed rating observed}
+
+  - name: agg_tornado_events__monthly_seasonality
+    description: One row per project-defined cohort and calendar month with confirmed and preliminary counts kept separate.
+    columns:
+      - name: region
+        description: Project-defined comparison cohort.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [alabama, dixie, tornado]}
+      - {name: month_number, description: Calendar month number from 1 through 12, data_tests: [not_null]}
+      - {name: month, description: Three-letter display month}
+      - {name: confirmed_tornadoes, description: Confirmed event count, data_tests: [non_negative]}
+      - {name: preliminary_tornado_reports, description: Preliminary report count, data_tests: [non_negative]}
+      - {name: significant_tornadoes, description: Confirmed F2 or EF2 and higher event count, data_tests: [non_negative]}
+
+exposures:
+  - name: portfolio_weather_explorer
+    label: Portfolio weather explorer
+    type: application
+    maturity: high
+    url: https://chaseburkhalter.com/weather
+    description: Public tornado event and dbt project explorer on the portfolio website.
+    depends_on:
+      - ref('fct_tornado_events')
+      - ref('agg_tornado_events__annual')
+    owner: {name: Chase Burkhalter}
+  - name: portfolio_weather_static_artifacts
+    label: Portfolio weather static artifacts
+    type: application
+    maturity: high
+    description: Versioned JSON contracts published to GitHub Pages.
+    depends_on: [ref('fct_tornado_events')]
+    owner: {name: Chase Burkhalter}

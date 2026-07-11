@@ -1,0 +1,6 @@
+version: 2
+models:
+  - name: int_ncei__tornado_events_enriched
+    description: One confirmed NCEI event enriched with project-defined cohort membership.
+  - name: int_iem__tornado_reports_conformed
+    description: One preliminary IEM point report conformed to the canonical event shape and cohort definitions.

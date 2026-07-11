@@ -110,7 +110,7 @@ class NceiFileDiscoveryTests(unittest.TestCase):
 class DuckDbOffsetCastNormalizationTests(unittest.TestCase):
     """Locks in DuckDB's CAST(... AS TIMESTAMP) behavior for offset-bearing strings.
 
-    A PR review bot flagged models/src/src_ncei__tornado_events.sql's
+    A PR review bot flagged the NCEI staging model's
     `cast(occurred_at as timestamp) as occurred_at_utc` as dropping the
     parsed UTC offset, on the theory that DuckDB's naive TIMESTAMP type
     ignores an embedded "+HH:MM"/"-HH:MM" suffix during the cast. Verified

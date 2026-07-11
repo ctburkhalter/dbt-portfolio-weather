@@ -1,0 +1,13 @@
+version: 2
+seeds:
+  - name: tornado_intensities
+    description: One deterministic F, EF, or Unknown damage-rating definition used by the event fact.
+    columns:
+      - name: rating_code
+        description: Unique F0-F5, EF0-EF5, or Unknown rating code.
+        data_tests: [not_null, unique]
+      - name: scale_system
+        description: F, EF, or Unknown damage scale.
+        data_tests:
+          - accepted_values:
+              arguments: {values: [F, EF, Unknown]}

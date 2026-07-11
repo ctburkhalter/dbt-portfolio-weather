@@ -5,3 +5,14 @@ south_alabama_tornado_watch:
       type: duckdb
       path: "{{ env_var('DBT_DUCKDB_PATH', 'weather.duckdb') }}"
       threads: 4
+      schema: dev
+    ci:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'weather.duckdb') }}"
+      threads: 4
+      schema: ci
+    prod:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'weather.duckdb') }}"
+      threads: 4
+      schema: prod

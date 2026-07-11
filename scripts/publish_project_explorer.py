@@ -12,9 +12,10 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-PUBLIC_ROOTS = ("ingestion", "macros", "models", "tests")
+PUBLIC_ROOTS = ("ingestion", "macros", "models", "seeds", "tests")
 PUBLIC_FILES = {
     ".github/workflows/refresh.yml",
+    ".github/workflows/ci.yml",
     "dbt_project.yml",
     "profiles.yml",
     "scripts/publish_dashboard.py",
@@ -51,14 +52,11 @@ def language_for(path: str) -> str:
 
 
 def category_for(path: str) -> str:
-    if path.startswith("models/src/"):
-        return "src"
-    if path.startswith("models/dim/"):
-        return "dim"
-    if path.startswith("models/fct/"):
-        return "fct"
-    if path.startswith("models/marts/"):
-        return "marts"
+    for category in ("staging", "intermediate", "marts"):
+        if path.startswith(f"models/{category}/"):
+            return category
+    if path.startswith("seeds/"):
+        return "seeds"
     if path.startswith("ingestion/"):
         return "ingestion"
     if path.startswith("tests/"):
@@ -116,15 +114,20 @@ def project_node(unique_id: str, node: dict[str, Any], catalog: dict[str, Any], 
         "id": unique_id,
         "name": node["name"],
         "resourceType": resource_type,
-        "layer": "source" if resource_type == "source" else node.get("path", "").split("/", 1)[0] or "model",
-        "path": node.get("original_file_path", "models/src/_sources.yml" if resource_type == "source" else ""),
+        "layer": resource_type if resource_type in {"source", "seed", "exposure"} else node.get("path", "").split("/", 1)[0] or "model",
+        "path": node.get("original_file_path", ""),
         "description": node.get("description", ""),
         "relation": relation_for(catalog, unique_id),
         "columns": columns,
-        "upstream": list(node.get("depends_on", {}).get("nodes", [])) if resource_type == "model" else [],
+        "upstream": list(node.get("depends_on", {}).get("nodes", [])) if resource_type != "source" else [],
         "downstream": [],
         "tests": [],
         "buildStatus": statuses.get(unique_id),
+        "materialization": node.get("config", {}).get("materialized") if resource_type in {"model", "seed"} else None,
+        "contractEnforced": bool(node.get("contract", {}).get("enforced") or node.get("config", {}).get("contract", {}).get("enforced")),
+        "owner": node.get("owner") or node.get("config", {}).get("meta", {}).get("owner"),
+        "maturity": node.get("maturity") or node.get("config", {}).get("meta", {}).get("maturity"),
+        "meta": node.get("config", {}).get("meta", {}),
     }
 
 
@@ -136,8 +139,11 @@ def build_artifact(manifest: dict[str, Any], catalog: dict[str, Any], run_result
         if node.get("package_name") == project_name:
             nodes[unique_id] = project_node(unique_id, node, catalog, statuses, "source")
     for unique_id, node in manifest.get("nodes", {}).items():
-        if node.get("package_name") == project_name and node.get("resource_type") == "model":
-            nodes[unique_id] = project_node(unique_id, node, catalog, statuses, "model")
+        if node.get("package_name") == project_name and node.get("resource_type") in {"model", "seed"}:
+            nodes[unique_id] = project_node(unique_id, node, catalog, statuses, node["resource_type"])
+    for unique_id, node in manifest.get("exposures", {}).items():
+        if node.get("package_name") == project_name:
+            nodes[unique_id] = project_node(unique_id, node, catalog, statuses, "exposure")
 
     for node in nodes.values():
         node["upstream"] = [unique_id for unique_id in node["upstream"] if unique_id in nodes]
@@ -168,13 +174,27 @@ def build_artifact(manifest: dict[str, Any], catalog: dict[str, Any], run_result
 
     test_results = [status for unique_id, status in statuses.items() if unique_id.startswith("test.")]
     model_results = [status for unique_id, status in statuses.items() if unique_id.startswith("model.")]
+    undocumented_public = [
+        f"{node['name']}.{column['name']}"
+        for node in nodes.values()
+        if node["resourceType"] == "model" and node["layer"] == "marts"
+        for column in node["columns"]
+        if not column["description"]
+    ]
+    if undocumented_public:
+        raise ValueError(f"Public mart columns require descriptions: {', '.join(undocumented_public)}")
     return {
-        "schemaVersion": "1.0",
+        "schemaVersion": "2.0",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "project": {"name": project_name, "dbtVersion": manifest["metadata"].get("dbt_version", "unknown"), "commitSha": commit_sha, "repositoryUrl": repo_url, "docsPath": "dbt-docs/index.html"},
         "summary": {
             "modelCount": sum(node["resourceType"] == "model" for node in nodes.values()),
             "sourceCount": sum(node["resourceType"] == "source" for node in nodes.values()),
+            "seedCount": sum(node["resourceType"] == "seed" for node in nodes.values()),
+            "exposureCount": sum(node["resourceType"] == "exposure" for node in nodes.values()),
+            "contractedModelCount": sum(node["resourceType"] == "model" and node["contractEnforced"] for node in nodes.values()),
+            "documentedColumnCount": sum(bool(column["description"]) for node in nodes.values() for column in node["columns"]),
+            "columnCount": sum(len(node["columns"]) for node in nodes.values()),
             "testCount": len(test_results),
             "passingTestCount": sum(status == "pass" for status in test_results),
             "successfulModelCount": sum(status == "success" for status in model_results),
@@ -186,7 +206,7 @@ def build_artifact(manifest: dict[str, Any], catalog: dict[str, Any], run_result
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="public/data/dbt-project.v1.json")
+    parser.add_argument("--output", default="public/data/v2/dbt-project.json")
     parser.add_argument("--manifest", default="target/manifest.json")
     parser.add_argument("--catalog", default="target/catalog.json")
     parser.add_argument("--run-results")

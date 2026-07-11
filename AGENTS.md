@@ -10,11 +10,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python ingestion/load_ncei_events.py --input data/StormEvents_details.csv.gz
 python ingestion/fetch_preliminary_tornado_reports.py
-DBT_PROFILES_DIR=. dbt build
+DBT_PROFILES_DIR=. dbt build --target dev
 cp target/run_results.json target/build_run_results.json
-DBT_PROFILES_DIR=. dbt docs generate
-python scripts/publish_dashboard.py --output public/data
-python scripts/publish_project_explorer.py --output public/data/dbt-project.v1.json
+DBT_PROFILES_DIR=. dbt docs generate --target dev
+python scripts/publish_dashboard.py --output public/data/v2
+python scripts/publish_project_explorer.py --output public/data/v2/dbt-project.json
 python -m unittest discover -s tests
 ```
 
@@ -23,8 +23,8 @@ Use `DBT_DUCKDB_PATH=/tmp/south-alabama-tornado.duckdb` for disposable local val
 ## Architecture and contracts
 
 - Python ingests NCEI historical confirmed tornado events and preliminary Iowa State Mesonet Local Storm Reports into DuckDB.
-- dbt models source data through `src`, `dim`, `fct`, and `marts` layers. Preserve that lineage in model changes.
-- `scripts/publish_dashboard.py` creates the versioned `portfolio-weather.v1.json` event-discovery contract (event coverage and `eventYearIndex`) and one `events/{year}.json` file per year of current events. `scripts/publish_project_explorer.py` creates `dbt-project.v1.json` from the successful dbt manifest, catalog, and saved build run results, including curated public source files and commit-pinned links. Save `target/build_run_results.json` before `dbt docs generate`, which replaces `run_results.json`. Both contracts are consumed by the portfolio's same-origin weather API. No individual events are embedded in `portfolio-weather.v1.json`; keep it that way so it stays cacheable.
+- dbt models data through source-system `staging`, purpose-built `intermediate`, and business-facing `marts` layers. `fct_tornado_events` is the sole canonical event fact.
+- The publishers create v2 event and project-explorer contracts under `data/v2/`. The contract uses `eventKey` while retaining source-native `eventId`. Save build run results before docs generation, and never embed individual events in an index file.
 - GitHub Actions refreshes recent NCEI files daily, validates dbt tests, then publishes JSON and dbt docs through GitHub Pages. A failed run must leave the previous published artifact available.
 
 ## Data semantics and guardrails
