@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: mart_annual_trend
+    description: Confirmed-only annual Alabama tornado counts and EF2+/F2+ significant-tornado counts, one row per year with at least one confirmed Alabama event. Retained for project-explorer lineage; not rendered as a portfolio chart (superseded by mart_annual_trend_current).
+    columns:
+      - name: year
+        description: Calendar year, from occurred_at.
+      - name: tornadoes
+        description: Count of confirmed Alabama tornado events in the year.
+      - name: significant_tornadoes
+        description: Count of confirmed Alabama events with rating_value >= 2 (EF2+/F2+).
+  - name: mart_annual_trend_current
+    description: >
+      Annual Alabama tornado counts from the combined current event view. `tornadoes` and
+      `confirmed_tornadoes` stay confirmed-only (identical by construction);
+      `preliminary_tornado_reports` tracks preliminary IEM counts separately so the two are
+      never blended into a single total. `significant_tornadoes` counts confirmed EF2+/F2+
+      events only.
+    columns:
+      - name: year
+        description: Calendar year, from occurred_at.
+      - name: tornadoes
+        description: "Count of confirmed Alabama tornado events in the year. Identical to confirmed_tornadoes by construction (see this model's description)."
+      - name: significant_tornadoes
+        description: "Count of Alabama events with rating_value >= 2 (EF2+/F2+). Confirmed-only in practice, since rating_value is always null for preliminary rows and so never satisfies the filter."
+      - name: confirmed_tornadoes
+        description: Count of confirmed Alabama NCEI events in the year.
+      - name: preliminary_tornado_reports
+        description: Count of preliminary Alabama IEM reports in the year, tracked separately from confirmed totals.
+  - name: mart_county_impact
+    description: Confirmed-only tornado counts, injuries, and the highest-rated event per Alabama county, ordered by tornado count. Retained for project-explorer lineage; not rendered as a portfolio chart.
+    columns:
+      - name: county
+        description: NCEI CZ_NAME county or zone name.
+      - name: tornadoes
+        description: Count of confirmed tornado events in the county.
+      - name: significant_tornadoes
+        description: "Count of confirmed tornado events in the county with rating_value >= 2 (EF2+/F2+)."
+      - name: injuries
+        description: "Sum of direct injuries (INJURIES_DIRECT) across confirmed tornado events in the county."
+      - name: max_rating
+        description: Highest F/EF rating code observed in the county, or Unknown if the county has no confirmed events.
+  - name: mart_monthly_seasonality
+    description: Confirmed-only monthly tornado counts and EF2+/F2+ significant-tornado counts for each of the three project cohorts (Alabama, Dixie, Tornado), one row per region and calendar month. Retained for project-explorer lineage; not rendered as a portfolio chart.
+    columns:
+      - name: region
+        description: One of alabama, dixie, or tornado (project-defined cohort, not a geographic region name).
+      - name: month_number
+        description: Calendar month, 1-12.
+      - name: month
+        description: "Three-letter month abbreviation (for example Jan), derived from occurred_at for display alongside month_number."
+      - name: tornadoes
+        description: Count of confirmed events in the region and month, summed across all years.
+      - name: significant_tornadoes
+        description: "Count of confirmed events in the region and month with rating_value >= 2 (EF2+/F2+), summed across all years."

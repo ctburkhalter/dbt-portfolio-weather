@@ -8,9 +8,11 @@ sources:
         description: Filtered NOAA NCEI Storm Events tornado records for the project analysis cohorts.
         columns:
           - name: event_id
-            tests: [not_null, unique]
+            data_tests:
+              - not_null
+              - unique
           - name: event_type
-            tests:
+            data_tests:
               - accepted_values:
                   arguments:
                     values: ["Tornado"]
@@ -18,9 +20,11 @@ sources:
         description: Preliminary Iowa State Mesonet Local Storm Report tornado point reports after the latest confirmed NCEI event.
         columns:
           - name: report_id
-            tests: [not_null, unique]
+            data_tests:
+              - not_null
+              - unique
           - name: report_type
-            tests:
+            data_tests:
               - accepted_values:
                   arguments:
                     values: ["TORNADO"]

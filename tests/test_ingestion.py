@@ -6,6 +6,8 @@ import sys
 import unittest
 from pathlib import Path
 
+import duckdb
+
 sys.path.append(str(Path(__file__).resolve().parents[1] / "ingestion"))
 
 from load_ncei_events import parse_cz_timezone_offset, parse_damage, parse_timestamp
@@ -103,6 +105,51 @@ class NceiFileDiscoveryTests(unittest.TestCase):
             "StormEvents_details-ftp_v1.0_d2025_c20260102.csv.gz"
         )
         self.assertIsNone(latest_filename(index, 2026))
+
+
+class DuckDbOffsetCastNormalizationTests(unittest.TestCase):
+    """Locks in DuckDB's CAST(... AS TIMESTAMP) behavior for offset-bearing strings.
+
+    A PR review bot flagged models/src/src_ncei__tornado_events.sql's
+    `cast(occurred_at as timestamp) as occurred_at_utc` as dropping the
+    parsed UTC offset, on the theory that DuckDB's naive TIMESTAMP type
+    ignores an embedded "+HH:MM"/"-HH:MM" suffix during the cast. Verified
+    empirically against this project's pinned duckdb==1.1.3 that the claim
+    is false: casting a string literal that carries an explicit offset
+    normalizes it to the UTC-equivalent naive value, and that result is
+    identical regardless of the connection's session TimeZone setting. This
+    is why occurred_at_utc is computed with a plain CAST rather than
+    TIMESTAMPTZ: TIMESTAMPTZ's *display* representation is session-timezone
+    dependent (would reintroduce a materialization bug across environments
+    with different OS/session timezones), while this plain-CAST value is
+    deterministic. These tests fail loudly if a future DuckDB version
+    changes this behavior.
+    """
+
+    def test_offset_bearing_cast_normalizes_to_utc_equivalent(self) -> None:
+        con = duckdb.connect()
+        try:
+            actual = con.execute("select cast('2020-01-01T14:30:00-06:00' as timestamp)").fetchone()[0]
+            expected = con.execute("select cast('2020-01-01T20:30:00+00:00' as timestamp)").fetchone()[0]
+        finally:
+            con.close()
+        self.assertEqual(actual, expected)
+        self.assertEqual(actual.isoformat(), "2020-01-01T20:30:00")
+
+    def test_offset_bearing_cast_is_independent_of_session_timezone(self) -> None:
+        # The bot's claim, if true, would make this cast dependent on the
+        # session's TimeZone setting (mirroring TIMESTAMPTZ's display
+        # behavior). Confirm four different session timezones all agree.
+        results = set()
+        for session_timezone in ("America/Chicago", "UTC", "Asia/Tokyo", "Pacific/Kiritimati"):
+            con = duckdb.connect()
+            try:
+                con.execute(f"SET TimeZone='{session_timezone}'")
+                value = con.execute("select cast('2020-01-01T14:30:00-06:00' as timestamp)").fetchone()[0]
+            finally:
+                con.close()
+            results.add(value.isoformat())
+        self.assertEqual(results, {"2020-01-01T20:30:00"})
 
 
 if __name__ == "__main__":

@@ -1,0 +1,237 @@
+version: 2
+
+models:
+  - name: fct_tornado_events
+    description: One confirmed NCEI tornado event. Start and end coordinates are endpoints, not a surveyed track geometry.
+    columns:
+      - name: event_id
+        description: "NCEI EVENT_ID, cast to varchar. Unique per confirmed event."
+        data_tests:
+          - not_null
+          - unique
+      - name: occurred_at
+        description: Local wall-clock event time (offset stripped); year-bucketing and display use this column.
+        data_tests:
+          - not_null
+      - name: occurred_at_utc
+        description: UTC-equivalent instant, used only for cross-source comparisons (see fct_tornado_events_current).
+      - name: occurred_at_utc_offset
+        description: UTC offset suffix reattached to occurred_at when publishing (see scripts/publish_dashboard.py).
+      - name: state
+        description: "{{ doc('state') }}"
+      - name: county
+        description: "{{ doc('county') }}"
+      - name: begin_location
+        description: "{{ doc('begin_location') }}"
+      - name: end_location
+        description: "{{ doc('end_location') }}"
+      - name: rating_code
+        description: "{{ doc('rating_code') }}"
+      - name: scale_system
+        description: "{{ doc('scale_system') }}"
+      - name: rating_value
+        description: "{{ doc('rating_value') }}"
+      - name: intensity_class
+        description: "{{ doc('intensity_class') }}"
+      - name: wind_estimate_low_mph
+        description: "{{ doc('wind_estimate_low_mph') }}"
+      - name: wind_estimate_high_mph
+        description: "{{ doc('wind_estimate_high_mph') }}"
+      - name: wind_estimate_note
+        description: "{{ doc('wind_estimate_note') }}"
+      - name: path_length_miles
+        description: "{{ doc('path_length_miles') }}"
+      - name: path_width_yards
+        description: "{{ doc('path_width_yards') }}"
+      - name: begin_latitude
+        description: "{{ doc('begin_latitude') }}"
+      - name: begin_longitude
+        description: "{{ doc('begin_longitude') }}"
+      - name: end_latitude
+        description: "{{ doc('end_latitude') }}"
+      - name: end_longitude
+        description: "{{ doc('end_longitude') }}"
+      - name: injuries
+        description: "{{ doc('injuries') }}"
+        data_tests:
+          - non_negative
+      - name: fatalities
+        description: "{{ doc('fatalities') }}"
+        data_tests:
+          - non_negative
+      - name: property_damage_usd
+        description: "{{ doc('property_damage_usd') }}"
+      - name: crop_damage_usd
+        description: "{{ doc('crop_damage_usd') }}"
+      - name: narrative
+        description: "{{ doc('narrative') }}"
+      - name: source_url
+        description: "{{ doc('source_url') }}"
+      - name: is_alabama
+        description: "{{ doc('is_alabama') }}"
+      - name: is_dixie_cohort
+        description: "{{ doc('is_dixie_cohort') }}"
+      - name: is_tornado_cohort
+        description: "{{ doc('is_tornado_cohort') }}"
+  - name: fct_preliminary_tornado_reports
+    description: One preliminary IEM Local Storm Report tornado point report. These rows are not confirmed NCEI Storm Events and do not include surveyed path geometry or F/EF rating fields.
+    columns:
+      - name: event_id
+        description: "IEM report_id, cast to varchar (see src_iem__preliminary_tornado_reports). Unique per preliminary report."
+        data_tests:
+          - not_null
+          - unique
+      - name: occurred_at
+        description: "Report time in UTC (IEM's native basis). Identical to occurred_at_utc for every row in this table."
+        data_tests:
+          - not_null
+      - name: occurred_at_utc
+        description: "UTC-equivalent instant, identical to occurred_at for every row in this table since IEM reports are already in UTC."
+      - name: occurred_at_utc_offset
+        description: "Always +00:00."
+      - name: state
+        description: "{{ doc('state') }}"
+        data_tests:
+          - not_null
+      - name: county
+        description: "{{ doc('county') }}"
+      - name: begin_location
+        description: "{{ doc('begin_location') }}"
+      - name: end_location
+        description: "{{ doc('end_location') }}"
+      - name: rating_code
+        description: "Always null. Local Storm Reports do not include a damage-based F or EF rating (see docs/METHODOLOGY.md Safety and interpretation)."
+      - name: scale_system
+        description: "Always null. Local Storm Reports have no F or EF scale to record."
+      - name: rating_value
+        description: "Always null. Local Storm Reports have no rating to derive a numeric severity from."
+      - name: intensity_class
+        description: "Always the literal value 'Preliminary report'. Local Storm Reports have no rating to classify."
+      - name: wind_estimate_low_mph
+        description: "Always null. Local Storm Reports have no rating-based wind estimate."
+      - name: wind_estimate_high_mph
+        description: "Always null. Local Storm Reports have no rating-based wind estimate."
+      - name: wind_estimate_note
+        description: "Always 'Preliminary Local Storm Reports do not include a damage-based F or EF wind estimate.'"
+      - name: path_length_miles
+        description: "{{ doc('path_length_miles') }}"
+      - name: path_width_yards
+        description: "{{ doc('path_width_yards') }}"
+      - name: begin_latitude
+        description: "{{ doc('begin_latitude') }}"
+      - name: begin_longitude
+        description: "{{ doc('begin_longitude') }}"
+      - name: end_latitude
+        description: "{{ doc('end_latitude') }}"
+      - name: end_longitude
+        description: "{{ doc('end_longitude') }}"
+      - name: injuries
+        description: "{{ doc('injuries') }}"
+      - name: fatalities
+        description: "{{ doc('fatalities') }}"
+      - name: property_damage_usd
+        description: "{{ doc('property_damage_usd') }}"
+      - name: crop_damage_usd
+        description: "{{ doc('crop_damage_usd') }}"
+      - name: narrative
+        description: "{{ doc('narrative') }}"
+      - name: source_url
+        description: "{{ doc('source_url') }}"
+      - name: report_source
+        description: "{{ doc('source_attribution') }}"
+      - name: wfo
+        description: "{{ doc('wfo') }}"
+      - name: is_alabama
+        description: "{{ doc('is_alabama') }}"
+      - name: is_dixie_cohort
+        description: "{{ doc('is_dixie_cohort') }}"
+      - name: is_tornado_cohort
+        description: "{{ doc('is_tornado_cohort') }}"
+  - name: fct_tornado_events_current
+    description: Current tornado event view that keeps all confirmed NCEI rows and appends preliminary IEM Local Storm Reports after the latest confirmed NCEI event timestamp.
+    columns:
+      - name: event_id
+        description: "Row identifier. NCEI's EVENT_ID for confirmed rows, IEM's hash-based report identifier for preliminary rows (see fct_tornado_events and fct_preliminary_tornado_reports). Unique within this table."
+        data_tests:
+          - not_null
+          - unique
+      - name: occurred_at
+        description: Local wall-clock event time (NCEI local time for confirmed rows, UTC for preliminary rows); this is the basis for the published occurredAt string once occurred_at_utc_offset is reattached.
+        data_tests:
+          - not_null
+      - name: occurred_at_utc
+        description: "UTC-equivalent instant for every row, used to compare confirmed and preliminary rows on a common basis (see the confirmed_cutoff CTE in this model) rather than mixing raw local and UTC wall-clock strings."
+      - name: occurred_at_utc_offset
+        description: UTC offset suffix reattached to occurred_at when publishing; always +00:00 for preliminary rows.
+        data_tests:
+          - not_null
+      - name: state
+        description: "{{ doc('state') }}"
+      - name: county
+        description: "{{ doc('county') }}"
+      - name: begin_location
+        description: "{{ doc('begin_location') }}"
+      - name: end_location
+        description: "{{ doc('end_location') }}"
+      - name: rating_code
+        description: "{{ doc('rating_code') }}"
+      - name: scale_system
+        description: "{{ doc('scale_system') }}"
+      - name: rating_value
+        description: "{{ doc('rating_value') }}"
+      - name: intensity_class
+        description: "{{ doc('intensity_class') }}"
+      - name: wind_estimate_low_mph
+        description: "{{ doc('wind_estimate_low_mph') }}"
+      - name: wind_estimate_high_mph
+        description: "{{ doc('wind_estimate_high_mph') }}"
+      - name: wind_estimate_note
+        description: "{{ doc('wind_estimate_note') }}"
+      - name: path_length_miles
+        description: "{{ doc('path_length_miles') }}"
+      - name: path_width_yards
+        description: "{{ doc('path_width_yards') }}"
+      - name: begin_latitude
+        description: "{{ doc('begin_latitude') }}"
+      - name: begin_longitude
+        description: "{{ doc('begin_longitude') }}"
+      - name: end_latitude
+        description: "{{ doc('end_latitude') }}"
+      - name: end_longitude
+        description: "{{ doc('end_longitude') }}"
+      - name: injuries
+        description: "{{ doc('injuries') }}"
+      - name: fatalities
+        description: "{{ doc('fatalities') }}"
+      - name: property_damage_usd
+        description: "{{ doc('property_damage_usd') }}"
+      - name: crop_damage_usd
+        description: "{{ doc('crop_damage_usd') }}"
+      - name: narrative
+        description: "{{ doc('narrative') }}"
+      - name: source_url
+        description: "{{ doc('source_url') }}"
+      - name: is_alabama
+        description: "{{ doc('is_alabama') }}"
+      - name: is_dixie_cohort
+        description: "{{ doc('is_dixie_cohort') }}"
+      - name: is_tornado_cohort
+        description: "{{ doc('is_tornado_cohort') }}"
+      - name: source_attribution
+        description: "{{ doc('source_attribution') }}"
+      - name: wfo
+        description: "{{ doc('wfo') }}"
+      - name: record_status
+        description: "Whether this row is a confirmed NCEI Storm Events record or a preliminary IEM Local Storm Report (see docs/METHODOLOGY.md Safety and interpretation for how each is meant to be presented)."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["confirmed", "preliminary"]
+      - name: source_system
+        description: "Which upstream system produced this row: ncei_storm_events for confirmed rows, iem_lsr for preliminary rows."
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["ncei_storm_events", "iem_lsr"]
+      - name: is_surveyed_track
+        description: "Always false. Reserved for a future surveyed-track geometry source; every currently published event uses endpoint coordinates only, never a surveyed path (see docs/METHODOLOGY.md Safety and interpretation)."
