@@ -1,6 +1,8 @@
 select
   event.event_id,
   event.occurred_at,
+  event.occurred_at_utc,
+  event.occurred_at_utc_offset,
   event.state,
   event.county,
   event.begin_location,
@@ -26,7 +28,5 @@ select
   event.source_url,
   event.report_source,
   event.wfo,
-  event.state = 'AL' as is_alabama,
-  event.state in ('AL', 'AR', 'GA', 'LA', 'MS', 'TN') as is_dixie_cohort,
-  event.state in ('CO', 'IA', 'KS', 'NE', 'OK', 'SD', 'TX') as is_tornado_cohort
+  {{ cohort_flags('event.state') }}
 from {{ ref('src_iem__preliminary_tornado_reports') }} as event

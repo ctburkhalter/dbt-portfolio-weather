@@ -1,6 +1,33 @@
 version: 2
 
 models:
+  - name: src_ncei__tornado_events
+    description: >
+      Typed NCEI Storm Events tornado records normalized from the raw source, filtered to
+      event_type = Tornado. occurred_at recovers NCEI's local wall-clock reading from the raw
+      offset-bearing string (see load_ncei_events.parse_timestamp); occurred_at_utc is the
+      UTC-equivalent instant used for cross-source comparisons; occurred_at_utc_offset is the
+      parsed +HH:MM/-HH:MM suffix.
+    columns:
+      - name: event_id
+        description: NCEI EVENT_ID, cast to varchar.
+      - name: occurred_at
+        description: Local wall-clock event time as recorded by NCEI, offset stripped.
+      - name: occurred_at_utc
+        description: UTC-equivalent instant, deterministically normalized from the raw offset-bearing string regardless of session timezone.
+      - name: occurred_at_utc_offset
+        description: Parsed UTC offset suffix (for example -06:00) derived from NCEI's CZ_TIMEZONE.
+  - name: src_iem__preliminary_tornado_reports
+    description: >
+      Typed Iowa State Mesonet Local Storm Report tornado point reports normalized from the raw
+      source, filtered to report_type = TORNADO. IEM reports are ingested in UTC, so occurred_at
+      and occurred_at_utc are identical here and occurred_at_utc_offset is always +00:00, unlike
+      the NCEI source which carries mixed local offsets.
+    columns:
+      - name: event_id
+        description: IEM report_id, cast to varchar.
+      - name: occurred_at
+        description: Report time in UTC (IEM's native basis).
   - name: dim_tornado_intensity
     description: Normalized F and EF damage ratings. Unrecognized or missing source ratings are represented by the explicit `Unknown` member.
     columns:
@@ -11,11 +38,34 @@ models:
           - accepted_values:
               arguments:
                 values: ["F", "EF", "Unknown"]
+  - name: dim_geography
+    description: >
+      One row per distinct state and county combination observed in confirmed NCEI tornado
+      events, carrying the three project-defined cohort membership flags (Alabama, Dixie,
+      Tornado) derived from state via the cohort_flags macro.
+    columns:
+      - name: state
+        description: Two-letter state code.
+      - name: county
+        description: NCEI CZ_NAME county or zone name, as reported (not standardized beyond source casing).
+      - name: is_alabama
+        description: True when state = AL.
+      - name: is_dixie_cohort
+        description: True when state is in the project-defined Dixie comparison cohort (AL, AR, GA, LA, MS, TN).
+      - name: is_tornado_cohort
+        description: True when state is in the project-defined Tornado comparison cohort (CO, IA, KS, NE, OK, SD, TX).
   - name: fct_tornado_events
     description: One confirmed NCEI tornado event. Start and end coordinates are endpoints, not a surveyed track geometry.
     columns:
       - name: event_id
         tests: [not_null, unique]
+      - name: occurred_at
+        description: Local wall-clock event time (offset stripped); year-bucketing and display use this column.
+        tests: [not_null]
+      - name: occurred_at_utc
+        description: UTC-equivalent instant, used only for cross-source comparisons (see fct_tornado_events_current).
+      - name: occurred_at_utc_offset
+        description: UTC offset suffix reattached to occurred_at when publishing (see scripts/publish_dashboard.py).
       - name: injuries
         tests:
           - non_negative
@@ -36,6 +86,12 @@ models:
     columns:
       - name: event_id
         tests: [not_null, unique]
+      - name: occurred_at
+        description: Local wall-clock event time (NCEI local time for confirmed rows, UTC for preliminary rows); this is the basis for the published occurredAt string once occurred_at_utc_offset is reattached.
+        tests: [not_null]
+      - name: occurred_at_utc_offset
+        description: UTC offset suffix reattached to occurred_at when publishing; always +00:00 for preliminary rows.
+        tests: [not_null]
       - name: record_status
         tests:
           - accepted_values:
@@ -46,3 +102,44 @@ models:
           - accepted_values:
               arguments:
                 values: ["ncei_storm_events", "iem_lsr"]
+  - name: mart_annual_trend
+    description: Confirmed-only annual Alabama tornado counts and EF2+/F2+ significant-tornado counts, one row per year with at least one confirmed Alabama event. Retained for project-explorer lineage; not rendered as a portfolio chart (superseded by mart_annual_trend_current).
+    columns:
+      - name: year
+        description: Calendar year, from occurred_at.
+      - name: tornadoes
+        description: Count of confirmed Alabama tornado events in the year.
+      - name: significant_tornadoes
+        description: Count of confirmed Alabama events with rating_value >= 2 (EF2+/F2+).
+  - name: mart_annual_trend_current
+    description: >
+      Annual Alabama tornado counts from the combined current event view. `tornadoes` and
+      `confirmed_tornadoes` stay confirmed-only (identical by construction);
+      `preliminary_tornado_reports` tracks preliminary IEM counts separately so the two are
+      never blended into a single total. `significant_tornadoes` counts confirmed EF2+/F2+
+      events only.
+    columns:
+      - name: year
+        description: Calendar year, from occurred_at.
+      - name: confirmed_tornadoes
+        description: Count of confirmed Alabama NCEI events in the year.
+      - name: preliminary_tornado_reports
+        description: Count of preliminary Alabama IEM reports in the year, tracked separately from confirmed totals.
+  - name: mart_county_impact
+    description: Confirmed-only tornado counts, injuries, and the highest-rated event per Alabama county, ordered by tornado count. Retained for project-explorer lineage; not rendered as a portfolio chart.
+    columns:
+      - name: county
+        description: NCEI CZ_NAME county or zone name.
+      - name: tornadoes
+        description: Count of confirmed tornado events in the county.
+      - name: max_rating
+        description: Highest F/EF rating code observed in the county, or Unknown if the county has no confirmed events.
+  - name: mart_monthly_seasonality
+    description: Confirmed-only monthly tornado counts and EF2+/F2+ significant-tornado counts for each of the three project cohorts (Alabama, Dixie, Tornado), one row per region and calendar month. Retained for project-explorer lineage; not rendered as a portfolio chart.
+    columns:
+      - name: region
+        description: One of alabama, dixie, or tornado (project-defined cohort, not a geographic region name).
+      - name: month_number
+        description: Calendar month, 1-12.
+      - name: tornadoes
+        description: Count of confirmed events in the region and month, summed across all years.

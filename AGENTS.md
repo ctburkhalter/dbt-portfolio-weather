@@ -34,6 +34,7 @@ Use `DBT_DUCKDB_PATH=/tmp/south-alabama-tornado.duckdb` for disposable local val
 - Begin and end coordinates are event endpoints. If rendered as a connection, label it an approximate endpoint connection, not a surveyed tornado track.
 - Dixie and Tornado Alley cohorts are project-defined comparison groups, not official boundaries.
 - Retain source attribution and event narrative in the published event contract where available.
+- Published event timestamps always carry an explicit UTC offset (`occurred_at_utc_offset`, reattached to `occurred_at` at publish time). Never publish a naive timestamp string; a naive string is parsed in the viewer's local timezone by `new Date()`, which shifts the displayed event time depending on where the visitor is.
 
 ## Documentation contract
 

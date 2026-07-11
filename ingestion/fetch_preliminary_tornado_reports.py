@@ -21,6 +21,13 @@ CHUNK_DAYS = 31
 
 
 def parse_timestamp(value: str | None) -> datetime | None:
+    """Parse an IEM LSR timestamp into a timezone-aware UTC datetime.
+
+    IEM reports are already in UTC (a bare "YYYYMMDDHHMM" or space-separated
+    value with no zone marker is IEM's own UTC wall clock, not a local time).
+    The return value always carries tzinfo=UTC so isoformat() emits an
+    explicit "+00:00" suffix instead of a naive string.
+    """
     if not value:
         return None
     normalized = value.strip().replace("Z", "+00:00")
@@ -37,9 +44,7 @@ def parse_timestamp(value: str | None) -> datetime | None:
                 continue
         else:
             return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-    return parsed
+    return parsed.astimezone(timezone.utc) if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
 
 
 def value(row: dict[str, str], key: str) -> str | None:
@@ -47,6 +52,13 @@ def value(row: dict[str, str], key: str) -> str | None:
 
 
 def report_id(row: dict[str, str]) -> str:
+    # REMARK is part of the identity hash, so an IEM correction to a report's
+    # remark text (not uncommon for preliminary LSRs) changes this eventId
+    # between runs. That is a known instability, accepted for now: dropping
+    # REMARK would reduce churn but raises collision risk between distinct
+    # reports that otherwise share timestamp, location, and office, and
+    # that tradeoff needs validation against real duplicate-report patterns
+    # before changing.
     identity = "|".join(
         (value(row, key) or "").strip()
         for key in ("VALID", "WFO", "TYPETEXT", "CITY", "COUNTY", "STATE", "LAT", "LON", "REMARK")
@@ -71,8 +83,8 @@ def fetch_rows(start: datetime, end: datetime) -> list[dict[str, str]]:
         response = requests.get(
             IEM_LSR_URL,
             params={
-                "sts": cursor.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
-                "ets": chunk_end.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z"),
+                "sts": cursor.isoformat().replace("+00:00", "Z"),
+                "ets": chunk_end.isoformat().replace("+00:00", "Z"),
                 "type": "TORNADO",
                 "state": ",".join(sorted(COHORT_STATES)),
                 "fmt": "csv",
@@ -88,11 +100,18 @@ def fetch_rows(start: datetime, end: datetime) -> list[dict[str, str]]:
 
 
 def latest_confirmed_timestamp(con: duckdb.DuckDBPyConnection) -> datetime | None:
+    # raw.ncei_tornado_events.occurred_at is a varchar holding a full ISO-8601
+    # string with an explicit UTC offset (see load_ncei_events.parse_timestamp).
+    # Casting the whole string to TIMESTAMP normalizes through the embedded
+    # offset to a UTC-equivalent naive value, which is what DuckDB's cast does
+    # deterministically regardless of session timezone, so max() here compares
+    # events in true chronological order even though individual rows carry
+    # different local offsets (CST/EST/MST).
     try:
-        value = con.execute("select max(occurred_at) from raw.ncei_tornado_events").fetchone()[0]
+        value = con.execute("select max(cast(occurred_at as timestamp)) from raw.ncei_tornado_events").fetchone()[0]
     except duckdb.CatalogException:
         return None
-    return value if isinstance(value, datetime) else None
+    return value.replace(tzinfo=timezone.utc) if isinstance(value, datetime) else None
 
 
 def main() -> None:
@@ -104,15 +123,15 @@ def main() -> None:
 
     con = duckdb.connect(args.database)
     cutoff = parse_timestamp(args.start) if args.start else latest_confirmed_timestamp(con)
-    start = cutoff + timedelta(seconds=1) if cutoff else datetime(datetime.now(timezone.utc).year, 1, 1)
-    end = parse_timestamp(args.end) if args.end else datetime.now(timezone.utc).replace(tzinfo=None)
+    start = cutoff + timedelta(seconds=1) if cutoff else datetime(datetime.now(timezone.utc).year, 1, 1, tzinfo=timezone.utc)
+    end = parse_timestamp(args.end) if args.end else datetime.now(timezone.utc)
 
     con.execute("create schema if not exists raw")
     con.execute("drop table if exists raw.preliminary_tornado_reports")
     con.execute("""
       create table raw.preliminary_tornado_reports (
         report_id varchar,
-        valid_at timestamp,
+        valid_at varchar,
         report_type varchar,
         state varchar,
         county varchar,
@@ -143,7 +162,7 @@ def main() -> None:
         row_id = report_id(row)
         rows_by_id[row_id] = (
             row_id,
-            valid_at,
+            valid_at.isoformat(),
             (value(row, "TYPETEXT") or "").upper(),
             (value(row, "STATE") or "").upper(),
             value(row, "COUNTY"),

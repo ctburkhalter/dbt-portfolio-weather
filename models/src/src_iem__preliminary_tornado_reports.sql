@@ -1,6 +1,12 @@
 select
   cast(report_id as varchar) as event_id,
-  valid_at as occurred_at,
+  -- valid_at (raw) is a full ISO-8601 string that always carries a "+00:00"
+  -- suffix (see fetch_preliminary_tornado_reports.parse_timestamp): IEM
+  -- reports are ingested in UTC, so the local and UTC-equivalent values are
+  -- identical here, unlike the NCEI side.
+  cast(valid_at as timestamp) as occurred_at,
+  cast(valid_at as timestamp) as occurred_at_utc,
+  '+00:00' as occurred_at_utc_offset,
   upper(state) as state,
   county,
   city as begin_location,

@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests
       - run: python ingestion/load_ncei_events.py --input data/StormEvents_details.csv.gz
@@ -40,14 +41,25 @@ jobs:
       # are cached by UTC date to avoid duplicate source downloads on reruns.
       - if: steps.ncei-cache.outputs.cache-hit != 'true'
         run: python ingestion/refresh_recent_ncei.py --output-dir /tmp/ncei-storm-events
-      - run: for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
+      # nullglob makes the loop a no-op instead of iterating over a literal
+      # "*.csv.gz" when no current-year files were discovered (for example,
+      # in the window early each year before NCEI has published anything for
+      # the new year; see refresh_recent_ncei.latest_filename).
+      - run: shopt -s nullglob; for file in /tmp/ncei-storm-events/*.csv.gz; do python ingestion/load_ncei_events.py --append --input "$file"; done
+        shell: bash
       - run: python ingestion/fetch_preliminary_tornado_reports.py
       - run: DBT_PROFILES_DIR=. dbt build
+      # dbt docs generate overwrites target/run_results.json with its own
+      # (uninteresting) results, so the build's real model and test outcomes
+      # are saved first for scripts/publish_project_explorer.py to read.
       - run: cp target/run_results.json target/build_run_results.json
       - run: DBT_PROFILES_DIR=. dbt docs generate
       - run: python scripts/publish_dashboard.py --output public/data
       - run: python scripts/publish_project_explorer.py --output public/data/dbt-project.v1.json
-      - run: cp -R target public/dbt-docs
+      # dbt docs' single-page app only fetches these three files relative to
+      # itself; the rest of target/ is compiled SQL and run-internal state
+      # that does not belong in the public Pages artifact.
+      - run: mkdir -p public/dbt-docs && cp target/index.html target/manifest.json target/catalog.json public/dbt-docs/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public

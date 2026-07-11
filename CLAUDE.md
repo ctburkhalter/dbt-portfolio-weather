@@ -6,7 +6,8 @@ Before changing a model, ingestion script, published JSON field, or GitHub Actio
 
 1. Preserve the distinction between confirmed NCEI events and preliminary IEM Local Storm Reports.
 2. Preserve the event-contract semantics for F/EF ratings, inferred wind ranges, and endpoint coordinates.
-3. Update the relevant source or model documentation and the README in the same change.
-4. Run `dbt build`, event and project-explorer JSON exports, and dbt docs generation when data is available.
+3. Preserve the timestamp-offset guarantee: every published `occurredAt` carries an explicit UTC offset, never a naive local time.
+4. Update the relevant source or model documentation and the README in the same change.
+5. Run `dbt build`, event and project-explorer JSON exports, and dbt docs generation when data is available.
 
 The consumer website is maintained in the sibling `chaseburkhalter.com` repository. Update its weather API types, tracking plan, analytics-system documentation, and on-page implementation notes whenever this project's versioned contract changes.

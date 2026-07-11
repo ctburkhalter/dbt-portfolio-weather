@@ -16,7 +16,7 @@ PUBLIC_ROOTS = ("ingestion", "macros", "models", "tests")
 PUBLIC_FILES = {
     ".github/workflows/refresh.yml",
     "dbt_project.yml",
-    "profiles.yml.example",
+    "profiles.yml",
     "scripts/publish_dashboard.py",
     "scripts/publish_project_explorer.py",
     "docs/METHODOLOGY.md",

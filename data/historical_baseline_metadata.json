@@ -1,7 +1,7 @@
 {
   "source": "NOAA NCEI Storm Events bulk details files",
   "sourceIndex": "https://www.ncei.noaa.gov/pub/data/swdi/stormevents/csvfiles/",
-  "retrievedAt": "2026-07-10T00:03:45.304767+00:00",
+  "retrievedAt": "2026-07-10T20:38:14.054956+00:00",
   "years": [
     1950,
     1951,
