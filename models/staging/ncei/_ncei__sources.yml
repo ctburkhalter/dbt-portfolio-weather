@@ -15,6 +15,7 @@ sources:
             description: NCEI event type, restricted to Tornado by ingestion.
             data_tests:
               - accepted_values:
-                  arguments: {values: [Tornado]}
+                  arguments:
+                    values: [Tornado]
           - name: occurred_at
             description: Offset-bearing ISO-8601 local event timestamp produced by ingestion.

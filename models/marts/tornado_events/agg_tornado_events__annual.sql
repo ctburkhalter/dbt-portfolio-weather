@@ -1,9 +1,9 @@
-select
-    extract(year from occurred_at)::integer as year,
-    count(*) filter (where record_status = 'confirmed') as confirmed_tornadoes,
-    count(*) filter (where record_status = 'preliminary') as preliminary_tornado_reports,
-    count(*) filter (where record_status = 'confirmed' and rating_value >= 2) as significant_tornadoes
-from {{ ref('fct_tornado_events') }}
-where is_alabama
-group by 1
-order by 1
+SELECT
+    EXTRACT(YEAR FROM occurred_at)::integer AS year
+    , COUNT(*) FILTER (WHERE record_status = 'confirmed') AS confirmed_tornadoes
+    , COUNT(*) FILTER (WHERE record_status = 'preliminary') AS preliminary_tornado_reports
+    , COUNT(*) FILTER (WHERE record_status = 'confirmed' AND rating_value >= 2) AS significant_tornadoes
+FROM {{ ref('fct_tornado_events') }}
+WHERE is_alabama
+GROUP BY 1
+ORDER BY 1

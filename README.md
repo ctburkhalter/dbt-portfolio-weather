@@ -63,9 +63,13 @@ DBT_PROFILES_DIR=. dbt docs generate --target dev
 python scripts/publish_dashboard.py --output public/data/v2
 python scripts/publish_project_explorer.py --output public/data/v2/dbt-project.json
 python -m unittest discover -s tests
+yamllint dbt_project.yml profiles.yml models seeds .github/workflows
+DBT_PROFILES_DIR=. sqlfluff lint models tests/generic
 ```
 
 `profiles.yml` is tracked directly (it contains no secrets, just a DuckDB path read from the `DBT_DUCKDB_PATH` environment variable), so no copy step is needed before running dbt.
+
+To refresh `weather.duckdb` with current data without retyping the ingestion and build steps, run `scripts/refresh_local_data.sh` (after activating your virtualenv). It loads the historical baseline, discovers and appends any newly published NCEI years, fetches preliminary IEM reports, and runs `dbt build --target dev`.
 
 Publish with GitHub Pages. Set the portfolio's `WEATHER_DATA_URL` to `data/v2/portfolio-weather.json`; the consumer derives v2 year shards and the project explorer from that base.
 

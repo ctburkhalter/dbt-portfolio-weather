@@ -16,9 +16,23 @@ DBT_PROFILES_DIR=. dbt docs generate --target dev
 python scripts/publish_dashboard.py --output public/data/v2
 python scripts/publish_project_explorer.py --output public/data/v2/dbt-project.json
 python -m unittest discover -s tests
+yamllint dbt_project.yml profiles.yml models seeds .github/workflows
+DBT_PROFILES_DIR=. sqlfluff lint models tests/generic
 ```
 
 Use `DBT_DUCKDB_PATH=/tmp/south-alabama-tornado.duckdb` for disposable local validation. Do not commit `weather.duckdb`, `target/`, `logs/`, `public/`, virtual environments, or Python cache files.
+
+`scripts/refresh_local_data.sh` wraps the ingestion-and-build portion of the above (baseline load, discover and append recent NCEI years, preliminary IEM fetch, `dbt build --target dev`) into one command for refreshing `weather.duckdb` with current data during local development. It mirrors `.github/workflows/refresh.yml` minus the docs generation and Pages publish steps.
+
+## SQL and YAML style
+
+`.sqlfluff` is the source of truth for SQL formatting; run `DBT_PROFILES_DIR=. sqlfluff fix models tests/generic` after writing or editing a model, then confirm `sqlfluff lint` is clean before handoff (CI runs lint, not fix, so unfixed files fail the build). Current conventions:
+
+- Keywords, function names, and `NULL`/`TRUE`/`FALSE` literals are uppercase (`SELECT`, `COUNT`, `EXTRACT`, `NULL`).
+- Data types are lowercase, including in casts (`::integer`, `CAST(NULL AS varchar)`).
+- Commas are leading, one column per line (`, occurred_at` at the start of the next line, not trailing on the previous one).
+
+Schema property files (`models/**/_*.yml`, `seeds/_seeds.yml`) use YAML block style throughout, not flow-style `{}` mappings, matching [dbt's documented YAML style](https://docs.getdbt.com/best-practices/how-we-style/5-how-we-style-our-yaml). Flow-style *sequences* of scalars are fine and already the norm (`data_tests: [not_null, unique]`); only flow-style *mappings* (`{key: value, ...}`) should be avoided.
 
 ## Architecture and contracts
 

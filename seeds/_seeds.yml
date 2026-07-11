@@ -10,4 +10,5 @@ seeds:
         description: F, EF, or Unknown damage scale.
         data_tests:
           - accepted_values:
-              arguments: {values: [F, EF, Unknown]}
+              arguments:
+                values: [F, EF, Unknown]
