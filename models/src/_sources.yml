@@ -5,26 +5,103 @@ sources:
     schema: raw
     tables:
       - name: ncei_tornado_events
-        description: Filtered NOAA NCEI Storm Events tornado records for the project analysis cohorts.
+        description: >
+          Filtered NOAA NCEI Storm Events tornado records for the project analysis cohorts,
+          loaded by ingestion/load_ncei_events.py directly from the source CSV with no
+          normalization beyond the EVENT_TYPE = Tornado and cohort-state filter. Typed and
+          normalized by src_ncei__tornado_events.
         columns:
           - name: event_id
+            description: NCEI EVENT_ID, unparsed.
             data_tests:
               - not_null
               - unique
           - name: event_type
+            description: NCEI EVENT_TYPE. Always "Tornado" in this table; filtered at load time.
             data_tests:
               - accepted_values:
                   arguments:
                     values: ["Tornado"]
+          - name: state
+            description: NCEI STATE, normalized to a two-letter code at load time (state names are mapped via STATE_NAME_TO_CODE in load_ncei_events.py).
+          - name: county
+            description: NCEI CZ_NAME, unparsed.
+          - name: occurred_at
+            description: NCEI BEGIN_DATE_TIME, parsed into an ISO-8601 string with the UTC offset implied by cz_timezone (see load_ncei_events.parse_timestamp and parse_cz_timezone_offset). Not a raw passthrough of the source column despite living in the raw schema, since the offset must be resolved before the value is useful.
+          - name: cz_timezone
+            description: NCEI CZ_TIMEZONE, unparsed. The source timezone code used to compute occurred_at's UTC offset; see load_ncei_events.parse_cz_timezone_offset for the recognized forms and default.
+          - name: begin_location
+            description: NCEI BEGIN_LOCATION, unparsed.
+          - name: end_location
+            description: NCEI END_LOCATION, unparsed.
+          - name: tor_f_scale
+            description: NCEI TOR_F_SCALE, upper-cased at load time but not yet normalized against the EF0-EF5/F0-F5 pattern (see dim_tornado_intensity for normalization).
+          - name: tor_length
+            description: NCEI TOR_LENGTH (path length in miles), unparsed varchar.
+          - name: tor_width
+            description: NCEI TOR_WIDTH (path width in yards), unparsed varchar.
+          - name: begin_lat
+            description: NCEI BEGIN_LAT, unparsed varchar.
+          - name: begin_lon
+            description: NCEI BEGIN_LON, unparsed varchar.
+          - name: end_lat
+            description: NCEI END_LAT, unparsed varchar.
+          - name: end_lon
+            description: NCEI END_LON, unparsed varchar.
+          - name: injuries_direct
+            description: NCEI INJURIES_DIRECT, unparsed varchar.
+          - name: deaths_direct
+            description: NCEI DEATHS_DIRECT, unparsed varchar.
+          - name: property_damage_usd
+            description: NCEI DAMAGE_PROPERTY, parsed from its K/M/B-suffixed shorthand into a double at load time (see load_ncei_events.parse_damage). Null when NCEI reports the damage as unknown.
+          - name: crop_damage_usd
+            description: NCEI DAMAGE_CROPS, parsed from its K/M/B-suffixed shorthand into a double at load time (see load_ncei_events.parse_damage). Null when NCEI reports the damage as unknown.
+          - name: event_narrative
+            description: NCEI EVENT_NARRATIVE, unparsed.
+          - name: source_url
+            description: Fixed literal, not a per-event source field. Always "https://www.ncei.noaa.gov/stormevents/", the NCEI Storm Events landing page.
       - name: preliminary_tornado_reports
-        description: Preliminary Iowa State Mesonet Local Storm Report tornado point reports after the latest confirmed NCEI event.
+        description: >
+          Preliminary Iowa State Mesonet Local Storm Report tornado point reports after the
+          latest confirmed NCEI event, loaded by ingestion/fetch_preliminary_tornado_reports.py
+          directly from the IEM API response with no normalization beyond the TYPETEXT = TORNADO
+          filter and timestamp parsing. Typed and normalized by
+          src_iem__preliminary_tornado_reports.
         columns:
           - name: report_id
+            description: Synthetic id, not an IEM field. A hash of report time, office, type, location, and remark text (see fetch_preliminary_tornado_reports.report_id); a later correction to a report's remark changes this id.
             data_tests:
               - not_null
               - unique
+          - name: valid_at
+            description: IEM VALID, parsed into a timezone-aware UTC datetime at fetch time (see fetch_preliminary_tornado_reports.parse_timestamp), then stored here as its ISO-8601 string representation.
           - name: report_type
+            description: IEM TYPETEXT, upper-cased at fetch time. Always "TORNADO" in this table; filtered at fetch time.
             data_tests:
               - accepted_values:
                   arguments:
                     values: ["TORNADO"]
+          - name: state
+            description: IEM STATE, upper-cased at fetch time.
+          - name: county
+            description: IEM COUNTY, unparsed.
+          - name: city
+            description: IEM CITY, unparsed.
+          - name: source
+            description: IEM SOURCE, unparsed. Free-text label identifying who filed the report (for example a trained spotter, law enforcement, media, or the public).
+          - name: remark
+            description: IEM REMARK, unparsed. Free-text report narrative; part of the identity hash used to compute report_id.
+          - name: latitude
+            description: IEM LAT, parsed to a double at fetch time.
+          - name: longitude
+            description: IEM LON, parsed to a double at fetch time.
+          - name: wfo
+            description: IEM WFO, unparsed. The National Weather Service Weather Forecast Office associated with the report.
+          - name: magnitude
+            description: IEM MAG, unparsed. Not used downstream; Local Storm Reports do not carry a damage-based F or EF rating.
+          - name: magnitude_qualifier
+            description: IEM QUALIFIER (or QUALIFY, depending on the response), unparsed. Not used downstream.
+          - name: source_url
+            description: Fixed literal, not a per-report IEM field. Always the IEM Local Storm Report request page.
+          - name: fetched_at
+            description: UTC timestamp this ingestion run retrieved the report from Iowa State Mesonet, not the event time. Operational bookkeeping only, not part of the published event contract.
